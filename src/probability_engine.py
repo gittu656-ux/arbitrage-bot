@@ -347,9 +347,11 @@ class ProbabilityEngine:
                     
                     opportunities.append(opportunity)
                     
+                    # Log with actual odds for debugging
                     self.logger.info(
                         f"ARBITRAGE: {pm_title} - {arb_team} - "
-                        f"PM: {pm_prob_team1:.2%} vs CB: {cb_prob_team2:.2%} - "
+                        f"PM: {pm_team} @ {pm_odds:.2f} ({pm_prob_team1:.2%}) vs "
+                        f"CB: {cb_team} @ {cb_odds:.2f} ({cb_prob_team2:.2%}) - "
                         f"Profit: {profit_pct:.2f}%"
                     )
             

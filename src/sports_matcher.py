@@ -461,7 +461,7 @@ class SportEventMatcher:
 
             outcome_name = outcome.get('outcome', '')
             odds = outcome.get('odds', 0.0)
-            market_type = (outcome.get('market_type') or '').lower()
+            market_type = (outcome.get('market_type') or '').lower().strip()
 
             if outcome_name and odds > 0:
                 # Always track in the backup map
@@ -470,25 +470,61 @@ class SportEventMatcher:
                 # Prefer only the main moneyline-style markets for our primary
                 # mapping. Cloudbet uses keys like "moneyline" / "Moneyline"
                 # and sometimes "match-winner" for the main game winner market.
-                is_primary_moneyline = market_type in {
-                    'moneyline',
-                    'match-winner',
-                    'match_winner',
-                    'ml',
-                }
+                # Also check for "game lines" which contains the main moneyline.
+                is_primary_moneyline = (
+                    market_type in {
+                        'moneyline',
+                        'match-winner',
+                        'match_winner',
+                        'ml',
+                        'game lines',  # Cloudbet's main market section
+                        'game-lines',
+                        'game_lines',
+                    } or
+                    'moneyline' in market_type or  # Handle "game-lines-moneyline" etc.
+                    market_type.startswith('game')  # "game lines" variations
+                )
 
                 if is_primary_moneyline:
-                    events[event_name]['outcomes'][outcome_name] = odds
+                    # Only store if we don't already have this outcome, or if this is a better match
+                    # Prioritize exact "moneyline" over "game lines" if both exist
+                    existing_odds = events[event_name]['outcomes'].get(outcome_name)
+                    if existing_odds is None:
+                        events[event_name]['outcomes'][outcome_name] = odds
+                    elif market_type == 'moneyline' or market_type == 'ml':
+                        # Overwrite with exact moneyline if we had a "game lines" version
+                        events[event_name]['outcomes'][outcome_name] = odds
 
-        # Post-process: if we didn't find any recognised moneyline market for
-        # an event, fall back to *all* outcomes so we don't silently drop the
-        # event entirely. This still improves correctness for most NBA/NFL
-        # events while remaining backwards compatible.
-        for data in events.values():
-            if not data['outcomes'] and data['_all_outcomes']:
-                data['outcomes'] = data['_all_outcomes']
+        # Post-process: Log which events found moneyline markets and which didn't
+        # DO NOT fall back to all outcomes - this causes wrong odds (spreads, totals, etc.)
+        # Only use events that have a recognized moneyline market
+        events_with_moneyline = 0
+        events_without_moneyline = 0
+        
+        for event_name, data in events.items():
+            if data['outcomes']:
+                events_with_moneyline += 1
+            else:
+                events_without_moneyline += 1
+                # Log what market types we saw for debugging
+                if data['_all_outcomes']:
+                    # Sample a few outcomes to see what market types exist
+                    sample_outcomes = list(data['_all_outcomes'].keys())[:3]
+                    self.logger.debug(
+                        f"Event '{event_name}' has no recognized moneyline market. "
+                        f"Sample outcomes: {sample_outcomes}. "
+                        f"Total outcomes available: {len(data['_all_outcomes'])}"
+                    )
+                # Remove events without moneyline to prevent wrong odds
+                # This is safer than using spreads/totals which have different meanings
             # Remove the internal backup key before returning
             data.pop('_all_outcomes', None)
+        
+        if events_without_moneyline > 0:
+            self.logger.warning(
+                f"Filtered out {events_without_moneyline} events without recognized moneyline markets. "
+                f"Kept {events_with_moneyline} events with valid moneyline data."
+            )
 
         return events
     
