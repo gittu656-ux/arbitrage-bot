@@ -95,8 +95,21 @@ class TelegramNotifier:
             odds_b = outcome_b_dict.get('odds', opportunity.get('cb_odds', opportunity.get('odds_b', 0)))
         else:
             # For arbitrage, outcome_b should be the opposite team
-            # Fallback: try to get from opportunity data
-            outcome_b = 'NO'
+            # Try to get from cb_teams if available
+            cb_teams = opportunity.get('cb_teams')
+            team = opportunity.get('team')
+            if cb_teams and isinstance(cb_teams, (tuple, list)) and len(cb_teams) >= 2 and team:
+                # Calculate opposite team
+                if cb_teams[0] == team:
+                    outcome_b = cb_teams[1]
+                elif cb_teams[1] == team:
+                    outcome_b = cb_teams[0]
+                else:
+                    # Use the other team
+                    outcome_b = cb_teams[1] if cb_teams[0] != team else cb_teams[0]
+            else:
+                # Last resort fallback
+                outcome_b = opportunity.get('team', 'Opposite Team')
             odds_b = opportunity.get('cb_odds', opportunity.get('odds_b', 0))
         
         bet_amount_a = opportunity.get('bet_amount_a', 0)
