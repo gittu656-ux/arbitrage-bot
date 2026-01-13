@@ -467,33 +467,39 @@ class SportEventMatcher:
                 # Always track in the backup map
                 events[event_name]['_all_outcomes'][outcome_name] = odds
 
-                # Prefer only the main moneyline-style markets for our primary
-                # mapping. Cloudbet uses keys like "moneyline" / "Moneyline"
-                # and sometimes "match-winner" for the main game winner market.
-                # Also check for "game lines" which contains the main moneyline.
-                is_primary_moneyline = (
-                    market_type in {
-                        'moneyline',
-                        'match-winner',
-                        'match_winner',
-                        'ml',
-                        'game lines',  # Cloudbet's main market section
-                        'game-lines',
-                        'game_lines',
-                    } or
-                    'moneyline' in market_type or  # Handle "game-lines-moneyline" etc.
-                    market_type.startswith('game')  # "game lines" variations
-                )
+                # STRICT: Only accept exact moneyline markets
+                # Cloudbet's "game lines" is too broad (includes spreads, totals, moneyline)
+                # We ONLY want the moneyline market, not spreads or totals
+                # Accept: "moneyline", "ml", "match-winner", "match_winner"
+                # Reject: "game lines", "spread", "total", "handicap", etc.
+                is_primary_moneyline = market_type in {
+                    'moneyline',
+                    'ml',
+                    'match-winner',
+                    'match_winner',
+                }
 
                 if is_primary_moneyline:
                     # Only store if we don't already have this outcome, or if this is a better match
-                    # Prioritize exact "moneyline" over "game lines" if both exist
                     existing_odds = events[event_name]['outcomes'].get(outcome_name)
                     if existing_odds is None:
                         events[event_name]['outcomes'][outcome_name] = odds
+                        # Log first time we see moneyline for this event
+                        if len(events[event_name]['outcomes']) == 1:
+                            self.logger.debug(
+                                f"Found moneyline market for '{event_name}': "
+                                f"market_type='{outcome.get('market_type')}', "
+                                f"first outcome: {outcome_name} @ {odds:.2f}"
+                            )
                     elif market_type == 'moneyline' or market_type == 'ml':
-                        # Overwrite with exact moneyline if we had a "game lines" version
+                        # Overwrite with exact moneyline if we had a different version
+                        old_odds = events[event_name]['outcomes'][outcome_name]
                         events[event_name]['outcomes'][outcome_name] = odds
+                        if abs(old_odds - odds) > 0.1:  # Log if odds changed significantly
+                            self.logger.debug(
+                                f"Updated moneyline odds for '{event_name}' {outcome_name}: "
+                                f"{old_odds:.2f} -> {odds:.2f} (market_type: {outcome.get('market_type')})"
+                            )
 
         # Post-process: Log which events found moneyline markets and which didn't
         # DO NOT fall back to all outcomes - this causes wrong odds (spreads, totals, etc.)

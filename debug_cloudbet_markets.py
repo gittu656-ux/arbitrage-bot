@@ -17,25 +17,33 @@ async def main():
         logger.info("Fetching Cloudbet outcomes...")
         outcomes = await fetcher.fetch_all_markets()
         
-        # Find OKC Thunder vs SA Spurs game
+        # Find Bears vs Rams or any NFL game
         target_event = None
         for outcome in outcomes:
             event_name = outcome.get('event_name', '')
-            if 'thunder' in event_name.lower() and 'spurs' in event_name.lower():
+            if ('bears' in event_name.lower() and 'rams' in event_name.lower()) or \
+               ('thunder' in event_name.lower() and 'spurs' in event_name.lower()):
                 target_event = event_name
+                logger.info(f"Found target game: {target_event}")
                 break
         
         if not target_event:
-            logger.warning("Could not find OKC Thunder vs SA Spurs game")
-            # Try to find any NBA game
+            logger.warning("Could not find Bears vs Rams or Thunder vs Spurs")
+            # Try to find any NFL game first, then NBA
             for outcome in outcomes:
-                if outcome.get('sport_key') == 'basketball':
+                if outcome.get('sport_key') == 'american-football':
                     target_event = outcome.get('event_name')
-                    logger.info(f"Using NBA game as example: {target_event}")
+                    logger.info(f"Using NFL game as example: {target_event}")
                     break
+            if not target_event:
+                for outcome in outcomes:
+                    if outcome.get('sport_key') == 'basketball':
+                        target_event = outcome.get('event_name')
+                        logger.info(f"Using NBA game as example: {target_event}")
+                        break
         
         if not target_event:
-            logger.error("No NBA games found")
+            logger.error("No games found")
             return
         
         logger.info(f"Analyzing event: {target_event}")
