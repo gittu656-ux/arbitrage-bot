@@ -213,12 +213,12 @@ class ProbabilityEngine:
                 team_probs[cb_teams[0]] = prob
             elif best_match2 > best_match1 and best_match2 > 60:
                 team_probs[cb_teams[1]] = prob
-            # If neither matches well, try "home"/"away" mapping
-            elif outcome_norm in ['home', 'h'] and cb_teams[0]:
-                # Assume first team is home (common convention)
+            # If neither matches well, try "home"/"away"/"team1"/"team2" mapping
+            elif outcome_norm in ['home', 'h', 'team1', '1'] and cb_teams[0]:
+                # Assume first team is home/team1
                 team_probs[cb_teams[0]] = prob
-            elif outcome_norm in ['away', 'a'] and cb_teams[1]:
-                # Assume second team is away
+            elif outcome_norm in ['away', 'a', 'team2', '2'] and cb_teams[1]:
+                # Assume second team is away/team2
                 team_probs[cb_teams[1]] = prob
         
         return team_probs
