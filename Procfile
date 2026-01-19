@@ -1,3 +1,3 @@
-web: python -m uvicorn src.dashboard.app:app --host 0.0.0.0 --port $PORT
-worker: python src/main.py
+web: python run_dashboard.py
+worker: python -m src.main
 
