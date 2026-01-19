@@ -471,11 +471,23 @@ async def main():
 
 
 if __name__ == "__main__":
+    import os
+    import sys
+    import subprocess
+    
+    print("⚠️  WARNING: src/main.py executed directly.")
+    print("🔄 Redirecting to Unified App (run_app.py) to ensure Dashboard + Bot run together...")
+    
+    # Ensure we are in the project root
+    project_root = Path(__file__).parent.parent
+    os.chdir(project_root)
+    
+    # Launch run_app.py
     try:
-        asyncio.run(main())
+        subprocess.run([sys.executable, "run_app.py"], check=True)
     except KeyboardInterrupt:
         print("\nBot stopped by user")
     except Exception as e:
-        print(f"Fatal error: {e}")
+        print(f"Fatal error redirecting to run_app.py: {e}")
         import traceback
         traceback.print_exc()
