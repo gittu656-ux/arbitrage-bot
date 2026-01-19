@@ -26,5 +26,5 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/src
 
 # Run the bot
-CMD ["python", "src/main.py"]
+CMD ["python", "run_app.py"]
 
