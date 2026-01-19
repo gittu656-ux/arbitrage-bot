@@ -1,4 +1,4 @@
-# Core dependencies
+# Core dependencies (Force Rebuild 1)
 httpx>=0.25.0
 python-telegram-bot>=20.7
 rapidfuzz>=3.5.0
