@@ -43,6 +43,8 @@ class ArbitrageDatabase:
                     guaranteed_profit REAL NOT NULL,
                     opportunity_hash TEXT UNIQUE NOT NULL,
                     alert_sent INTEGER DEFAULT 0,
+                    bet_placed INTEGER DEFAULT 0,
+                    realized_pnl REAL DEFAULT 0.0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -56,7 +58,17 @@ class ArbitrageDatabase:
                 CREATE INDEX IF NOT EXISTS idx_timestamp 
                 ON arbitrage_events(timestamp)
             """)
-            
+
+            # Backwards-compatible schema upgrade: add bet_placed/realized_pnl if missing
+            try:
+                conn.execute("ALTER TABLE arbitrage_events ADD COLUMN bet_placed INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE arbitrage_events ADD COLUMN realized_pnl REAL DEFAULT 0.0")
+            except Exception:
+                pass
+
             conn.commit()
     
     @contextmanager
@@ -257,12 +269,20 @@ class ArbitrageDatabase:
                 "SELECT SUM(guaranteed_profit) FROM arbitrage_events"
             )
             total_profit = profit_cursor.fetchone()[0] or 0.0
-            
+
             # Average profit percentage
             avg_profit = conn.execute(
                 "SELECT AVG(profit_percentage) FROM arbitrage_events"
             ).fetchone()[0] or 0.0
-            
+
+            # Bets taken & realized P&L (based on bet_placed flag)
+            bets_taken = conn.execute(
+                "SELECT COUNT(*) FROM arbitrage_events WHERE bet_placed = 1"
+            ).fetchone()[0]
+            realized_pnl = conn.execute(
+                "SELECT SUM(realized_pnl) FROM arbitrage_events WHERE bet_placed = 1"
+            ).fetchone()[0] or 0.0
+
             # Recent opportunities (last 24 hours)
             from datetime import datetime, timedelta
             yesterday = (datetime.utcnow() - timedelta(days=1)).isoformat()
@@ -276,6 +296,19 @@ class ArbitrageDatabase:
                 'alerted_opportunities': alerted,
                 'total_profit': round(total_profit, 2),
                 'average_profit_percentage': round(avg_profit, 2),
-                'recent_opportunities_24h': recent
+                'recent_opportunities_24h': recent,
+                'bets_taken': bets_taken,
+                'realized_pnl': round(realized_pnl, 2),
             }
+
+    def mark_bet_placed(self, opportunity_id: int, realized_pnl: float = 0.0):
+        """Mark an opportunity as having a bet placed and store realized P&L."""
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE arbitrage_events "
+                "SET bet_placed = 1, realized_pnl = ? "
+                "WHERE id = ?",
+                (realized_pnl, opportunity_id)
+            )
+            conn.commit()
 

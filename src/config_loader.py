@@ -57,6 +57,20 @@ class QuietHoursConfig(BaseModel):
     end_hour: int = Field(ge=0, le=23)
 
 
+class AutobetConfig(BaseModel):
+    """Autobet and risk management configuration."""
+    enabled: bool = False
+    # Minimum profit % required to even consider autobetting
+    min_profit_threshold: float = Field(default=1.0, ge=0)
+    # Maximum number of arbitrage bets per day
+    max_bets_per_day: int = Field(default=20, ge=0)
+    # Hard cap on total capital per bet as % of bankroll (e.g. 0.25 = 25%)
+    max_stake_fraction: float = Field(default=0.25, ge=0, le=1)
+    # Optional daily loss limit in USD (0 = disabled). Since arbitrage is
+    # theoretically risk-free, this mainly protects against execution issues.
+    daily_loss_limit: float = Field(default=0.0, ge=0)
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
     level: str = "INFO"
@@ -85,6 +99,7 @@ class Config(BaseModel):
     quiet_hours: QuietHoursConfig
     logging: LoggingConfig
     database: DatabaseConfig
+    autobet: AutobetConfig = AutobetConfig()
     debug_api: bool = False
     use_mock_data: bool = False
 
@@ -169,6 +184,12 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
     config_dict['quiet_hours'] = QuietHoursConfig(**config_dict['quiet_hours'])
     config_dict['logging'] = LoggingConfig(**config_dict['logging'])
     config_dict['database'] = DatabaseConfig(**config_dict['database'])
+    # Autobet is optional – if missing, use defaults
+    autobet_cfg = config_dict.get('autobet', {})
+    if isinstance(autobet_cfg, dict):
+        config_dict['autobet'] = AutobetConfig(**autobet_cfg)
+    else:
+        config_dict['autobet'] = AutobetConfig()
     
     return Config(**config_dict)
 

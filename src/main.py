@@ -27,6 +27,7 @@ try:
     from src.bet_sizing import BetSizing
     from src.telegram_notifier import TelegramNotifier
     from src.database import ArbitrageDatabase
+    from src.autobet import AutobetEngine
     from src.mock_data.loader import MockDataLoader
 except ImportError:
     from config_loader import load_config
@@ -41,6 +42,7 @@ except ImportError:
     from bet_sizing import BetSizing
     from telegram_notifier import TelegramNotifier
     from database import ArbitrageDatabase
+    from autobet import AutobetEngine
     from mock_data.loader import MockDataLoader
 
 
@@ -124,6 +126,12 @@ class ArbitrageBot:
         )
         
         self.database = ArbitrageDatabase(self.config.database.path)
+        # Autobet engine (can be disabled via config)
+        self.autobet_engine = AutobetEngine(
+            db=self.database,
+            bankroll_cfg=self.config.bankroll,
+            autobet_cfg=self.config.autobet,
+        )
         
         # Mock data loader
         self.mock_loader = MockDataLoader()
@@ -380,12 +388,18 @@ class ArbitrageBot:
                 if profit_pct < 0.5:
                     self.logger.debug(f"Skipping Telegram alert - profit {profit_pct:.2f}% is < 0.5% threshold")
                     continue
-                
+
+                # Autobet (simulation / bookkeeping only) if enabled
+                try:
+                    self.autobet_engine.autobet_opportunity(opportunity, db_id)
+                except Exception as e:
+                    self.logger.error(f"Error in autobet engine: {e}", exc_info=True)
+
                 # Send Telegram alert (if not quiet hours)
                 if not self._is_quiet_hours():
                     self.logger.info(f"Attempting to send Telegram alert for: {opportunity['market_name']}")
                     try:
-                        # Use shorter timeout and await it (but with timeout protection)
+                        # Use asyncio.wait_for with timeout
                         alert_sent = await asyncio.wait_for(
                             self.telegram_notifier.send_alert(opportunity, timeout=5),
                             timeout=6  # Slightly longer than send_alert timeout
