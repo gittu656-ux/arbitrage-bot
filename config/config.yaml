@@ -27,6 +27,7 @@ apis:
     retry_delay: 2  # Seconds between retries
   
   polymarket:
+    private_key: ""  # Set via POLYMARKET_PRIVATE_KEY environment variable (overrides this)
     base_url: "https://gamma-api.polymarket.com"
     timeout: 10
     retry_attempts: 3
@@ -55,11 +56,12 @@ use_mock_data: false  # Set to true to force use of mock data instead of real AP
 database:
   path: "data/arbitrage_events.db"
 
-# Autobet Configuration (Paper Trading / Simulation)
+# Autobet Configuration (REAL EXECUTION)
 autobet:
   enabled: true
-  min_profit_threshold: 10.0
-  max_bets_per_day: 20
-  max_stake_fraction: 0.25
-  daily_loss_limit: 50.0
+  min_profit_threshold: 10.0  # ONLY take opportunities above 10% profit
+  max_bets_per_day: 50
+  max_stake_fraction: 0.1     # Risk 10% of bankroll per arb
+  daily_loss_limit: 100.0
+  real_execution: true        # DANGER: Set to true to place real bets
 

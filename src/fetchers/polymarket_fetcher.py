@@ -100,6 +100,16 @@ class PolymarketFetcher:
 
             # Get outcomes and prices
             outcomes = {}
+            token_ids = {} # Mapping outcome name -> token_id
+            
+            # Extract CLOB Token IDs if available
+            clob_token_ids = market_data.get('clobTokenIds', [])
+            if isinstance(clob_token_ids, str):
+                try:
+                    import json
+                    clob_token_ids = json.loads(clob_token_ids)
+                except:
+                    clob_token_ids = []
 
             # Method 1: outcomes list + outcomePrices list (NEW - PRIMARY METHOD)
             outcomes_list = market_data.get('outcomes', [])
@@ -134,6 +144,9 @@ class PolymarketFetcher:
                                         decimal_odds = self._convert_price_to_odds(price_float)
                                         if decimal_odds:
                                             outcomes[outcome_name] = decimal_odds
+                                            # Store token_id if available
+                                            if i < len(clob_token_ids):
+                                                token_ids[outcome_name] = clob_token_ids[i]
                                 except (ValueError, TypeError):
                                     continue
 
@@ -244,7 +257,11 @@ class PolymarketFetcher:
                 'title': question,
                 'outcomes': outcomes,
                 'url': market_url,
-                'start_time': None  # Polymarket doesn't provide start times
+                'start_time': None,  # Polymarket doesn't provide start times
+                'metadata': {
+                    'token_ids': token_ids,
+                    'condition_id': market_data.get('conditionId')
+                }
             }
 
         except Exception as e:

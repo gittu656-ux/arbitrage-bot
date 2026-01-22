@@ -285,7 +285,9 @@ class CloudbetFetcher:
                         'start_time': start_time,
                         'event_status': event_status,
                         'sport_key': sport_key,
-                        'competition_key': competition_key
+                        'competition_key': competition_key,
+                        'selection_id': selection.get('id') or selection.get('key') or selection.get('outcome'),
+                        'market_id': event_id
                     })
 
                     self.stats['outcomes_fetched'] += 1

@@ -14,6 +14,7 @@ class NormalizedMarket(BaseModel):
     outcomes: Dict[str, float] = Field(..., description="Outcome name -> decimal odds mapping")
     url: str = Field(..., description="Market URL")
     start_time: Optional[datetime] = Field(None, description="Event start time if available")
+    metadata: Dict = Field(default_factory=dict, description="Platform-specific metadata (e.g. token IDs)")
     
     class Config:
         json_schema_extra = {

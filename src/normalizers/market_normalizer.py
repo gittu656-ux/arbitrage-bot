@@ -24,7 +24,8 @@ class MarketNormalizer:
                     title=market.get('title', ''),
                     outcomes=market.get('outcomes', {}),
                     url=market.get('url', ''),
-                    start_time=market.get('start_time')
+                    start_time=market.get('start_time'),
+                    metadata=market.get('metadata', {})
                 )
                 normalized.append(norm)
             except Exception as e:
@@ -50,12 +51,19 @@ class MarketNormalizer:
                     'title': f"{event_name} - {market_name}",
                     'outcomes': {},
                     'url': outcome.get('url', ''),
-                    'start_time': outcome.get('start_time')
+                    'start_time': outcome.get('start_time'),
+                    'metadata': {
+                        'selection_ids': {},
+                        'event_id': outcome.get('market_id'), # market_id in outcome is the event_id
+                        'sport_key': outcome.get('sport_key')
+                    }
                 }
             
             outcome_name = outcome.get('outcome', 'Unknown')
             odds = outcome.get('odds', 0.0)
             markets_dict[key]['outcomes'][outcome_name] = odds
+            # Store selection ID in metadata
+            markets_dict[key]['metadata']['selection_ids'][outcome_name] = outcome.get('selection_id')
         
         # Convert to NormalizedMarket objects
         normalized = []

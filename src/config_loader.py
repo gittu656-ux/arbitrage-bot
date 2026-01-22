@@ -44,6 +44,7 @@ class CloudbetAPIConfig(BaseModel):
 
 class PolymarketAPIConfig(BaseModel):
     """Polymarket API configuration."""
+    private_key: str = Field(default="", description="Polymarket private key")
     base_url: str = "https://clob.polymarket.com"
     timeout: int = 10
     retry_attempts: int = 3
@@ -69,6 +70,8 @@ class AutobetConfig(BaseModel):
     # Optional daily loss limit in USD (0 = disabled). Since arbitrage is
     # theoretically risk-free, this mainly protects against execution issues.
     daily_loss_limit: float = Field(default=0.0, ge=0)
+    # Flag to enable real money betting (dangerous!)
+    real_execution: bool = Field(default=False)
 
 
 class LoggingConfig(BaseModel):
@@ -168,6 +171,11 @@ def load_config(config_path: str = "config/config.yaml") -> Config:
         env_api_key = os.getenv('CLOUDBET_API_KEY')
         if env_api_key:
             config_dict['apis']['cloudbet']['api_key'] = env_api_key
+            
+    if 'apis' in config_dict and 'polymarket' in config_dict['apis']:
+        env_pm_key = os.getenv('POLYMARKET_PRIVATE_KEY')
+        if env_pm_key:
+            config_dict['apis']['polymarket']['private_key'] = env_pm_key
     
     # Handle nested API config
     if 'apis' in config_dict:

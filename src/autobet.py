@@ -13,7 +13,9 @@ from typing import Dict
 
 from .logger import setup_logger
 from .database import ArbitrageDatabase
-from .config_loader import AutobetConfig, BankrollConfig
+from .config_loader import AutobetConfig, BankrollConfig, Config
+from .execution.polymarket_executor import PolymarketExecutor
+from .execution.cloudbet_executor import CloudbetExecutor
 
 
 class AutobetEngine:
@@ -32,6 +34,13 @@ class AutobetEngine:
         self._today = date.today()
         self._bets_today = 0
         self._loss_today = 0.0
+        
+        # Initialize executors if real execution is enabled
+        self.pm_executor = None
+        self.cb_executor = None
+        if self.cfg.real_execution:
+            # We need the full config to get API keys
+            pass # Will be initialized in start_execution
 
     def _reset_daily_counters_if_needed(self):
         today = date.today()
@@ -118,5 +127,78 @@ class AutobetEngine:
             f"{opportunity.get('platform_a')}/{opportunity.get('platform_b')} | "
             f"Stake=${total_capital:.2f} | PnL=${guaranteed_profit:.2f}"
         )
+
+        # REAL EXECUTION (OPTIONAL)
+        if self.cfg.real_execution:
+            import asyncio
+            asyncio.create_task(self._execute_real_bets(opportunity))
+
+    async def _execute_real_bets(self, opportunity: Dict):
+        """Execute real bets on both platforms."""
+        try:
+            # Try to initialize executors if not already done
+            if not self.pm_executor or not self.cb_executor:
+                # This requires refactoring how AutobetEngine is initialized
+                # For now, we'll try to find keys in env
+                import os
+                pm_key = os.getenv("POLYMARKET_PRIVATE_KEY")
+                cb_key = os.getenv("CLOUDBET_API_KEY")
+                
+                if pm_key and not self.pm_executor:
+                    self.pm_executor = PolymarketExecutor(pm_key)
+                if cb_key and not self.cb_executor:
+                    self.cb_executor = CloudbetExecutor(cb_key)
+
+            if not self.pm_executor or not self.cb_executor:
+                self.logger.error("Executors not initialized - missing API keys.")
+                return
+
+            platform_a = opportunity.get('platform_a')
+            platform_b = opportunity.get('platform_b')
+            
+            # Extract IDs and parameters
+            # Platform A
+            market_a_meta = opportunity.get('market_a', {}).get('metadata', {})
+            outcome_a_name = opportunity.get('outcome_a', {}).get('name')
+            token_id_a = market_a_meta.get('token_ids', {}).get(outcome_a_name)
+            odds_a = opportunity.get('odds_a')
+            stake_a = opportunity.get('bet_amount_a')
+
+            # Platform B
+            market_b_meta = opportunity.get('market_b', {}).get('metadata', {})
+            outcome_b_name = opportunity.get('outcome_b', {}).get('name')
+            selection_id_b = market_b_meta.get('selection_ids', {}).get(outcome_b_name)
+            odds_b = opportunity.get('odds_b')
+            stake_b = opportunity.get('bet_amount_b')
+
+            self.logger.info(f"STARTING REAL EXECUTION for arbitrage #{opportunity.get('market_name')}")
+
+            # Execution logic: Sequence matters. 
+            # Usually Cloudbet (sportsbook) is more sensitive to odds movement.
+            # But Polymarket (exchange) can have liquidity issues.
+            
+            # 1. Place bet on Platform B (Cloudbet as per current matcher flow)
+            success_b = False
+            if selection_id_b:
+                resp_b = await self.cb_executor.place_bet(selection_id_b, odds_b, stake_b)
+                if resp_b:
+                    success_b = True
+                    self.logger.info("Successfully placed bet on Cloudbet")
+                else:
+                    self.logger.error("Failed to place bet on Cloudbet. ABORTING hedge.")
+                    return # ABORT to avoid unhedged position
+            
+            # 2. Place bet on Platform A (Polymarket)
+            if success_b and token_id_a:
+                # Convert decimal odds to price (e.g. 2.0 -> 0.5)
+                price_a = 1.0 / odds_a
+                resp_a = await self.pm_executor.place_order(token_id_a, price_a, "BUY", stake_a)
+                if resp_a:
+                    self.logger.info("Successfully placed hedge order on Polymarket")
+                else:
+                    self.logger.critical(f"FAILED TO HEDGE on Polymarket! You have an unhedged bet on Cloudbet for ${stake_b}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in real execution: {e}", exc_info=True)
 
 
