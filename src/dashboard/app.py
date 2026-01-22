@@ -9,8 +9,12 @@ from typing import Dict, List
 from datetime import datetime
 import json
 
-from ..database import ArbitrageDatabase
-from ..logger import setup_logger
+try:
+    from src.database import ArbitrageDatabase
+    from src.logger import setup_logger
+except ImportError:
+    from database import ArbitrageDatabase
+    from logger import setup_logger
 
 
 class DashboardApp:

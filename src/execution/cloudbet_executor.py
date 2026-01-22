@@ -1,7 +1,10 @@
 import httpx
 import uuid
 from typing import Dict, Optional
-from ..logger import setup_logger
+try:
+    from src.logger import setup_logger
+except ImportError:
+    from logger import setup_logger
 
 class CloudbetExecutor:
     """Handles bet placement on Cloudbet Trading API."""

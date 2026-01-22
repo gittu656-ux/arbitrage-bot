@@ -4,7 +4,10 @@ from typing import Dict, Optional
 from py_clob_client.client import ClobClient
 from py_clob_client.constants import POLYGON
 from py_clob_client.clob_types import OrderArgs, ApiCreds
-from ..logger import setup_logger
+try:
+    from src.logger import setup_logger
+except ImportError:
+    from logger import setup_logger
 
 class PolymarketExecutor:
     """Handles order placement on Polymarket CLOB."""

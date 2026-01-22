@@ -7,7 +7,10 @@ from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import httpx
 
-from ..logger import setup_logger
+try:
+    from src.logger import setup_logger
+except ImportError:
+    from logger import setup_logger
 
 
 class PolymarketFetcher:

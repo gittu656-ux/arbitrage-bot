@@ -11,11 +11,18 @@ implementing the `_execute_real_bet` method.
 from datetime import datetime, date
 from typing import Dict
 
-from .logger import setup_logger
-from .database import ArbitrageDatabase
-from .config_loader import AutobetConfig, BankrollConfig, Config
-from .execution.polymarket_executor import PolymarketExecutor
-from .execution.cloudbet_executor import CloudbetExecutor
+try:
+    from src.logger import setup_logger
+    from src.database import ArbitrageDatabase
+    from src.config_loader import AutobetConfig, BankrollConfig, Config
+    from src.execution.polymarket_executor import PolymarketExecutor
+    from src.execution.cloudbet_executor import CloudbetExecutor
+except ImportError:
+    from logger import setup_logger
+    from database import ArbitrageDatabase
+    from config_loader import AutobetConfig, BankrollConfig, Config
+    from execution.polymarket_executor import PolymarketExecutor
+    from execution.cloudbet_executor import CloudbetExecutor
 
 
 class AutobetEngine:
