@@ -145,7 +145,7 @@ class ArbitrageDatabase:
             cursor = conn.execute(
                 """SELECT odds_a, odds_b FROM arbitrage_events 
                    WHERE market_name = ? AND platform_a = ? AND platform_b = ?
-                   ORDER BY detected_at DESC LIMIT 1""",
+                   ORDER BY timestamp DESC LIMIT 1""",
                 (market_name, platform_a, platform_b)
             )
             result = cursor.fetchone()
