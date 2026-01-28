@@ -89,7 +89,7 @@ class AutobetEngine:
 
         return True
 
-    def autobet_opportunity(self, opportunity: Dict, db_id: int) -> None:
+    async def autobet_opportunity(self, opportunity: Dict, db_id: int) -> None:
         """
         Mark an opportunity as bet-taken, respecting risk limits.
 
@@ -137,8 +137,7 @@ class AutobetEngine:
 
         # REAL EXECUTION (OPTIONAL)
         if self.cfg.real_execution:
-            import asyncio
-            asyncio.create_task(self._execute_real_bets(opportunity))
+            await self._execute_real_bets(opportunity)
 
     async def _execute_real_bets(self, opportunity: Dict):
         """Execute real bets on both platforms."""
@@ -178,7 +177,14 @@ class AutobetEngine:
             odds_b = opportunity.get('odds_b')
             stake_b = opportunity.get('bet_amount_b')
 
+            
             self.logger.info(f"STARTING REAL EXECUTION for arbitrage #{opportunity.get('market_name')}")
+            self.logger.debug(f"Extracted IDs - Polymarket token_id: {token_id_a}, Cloudbet selection_id: {selection_id_b}")
+            
+            if not token_id_a:
+                self.logger.error(f"Missing Polymarket token_id for outcome '{outcome_a_name}'. Cannot execute.")
+            if not selection_id_b:
+                self.logger.error(f"Missing Cloudbet selection_id for outcome '{outcome_b_name}'. Cannot execute.")
 
             # Execution logic: Sequence matters. 
             # Usually Cloudbet (sportsbook) is more sensitive to odds movement.
