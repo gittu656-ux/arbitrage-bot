@@ -1,0 +1,5 @@
+The reason your account balance didn't change (even though the dashboard said "Bets Taken") was a technical issue where the "place bet" command was being sent to the background but not actually executed properly by the system (it was "firing and forgetting" instead of waiting for confirmation).
+
+I have now fixed this "Async Execution" bug. The system is now forced to **wait and confirm** that the bet is actually placed on the exchange before moving on.
+
+**Please restart the bot.** The next time you see "Bets Taken," you will see the logs say "STARTING REAL EXECUTION" and your account balances will definitely decrease as the real bets are placed.

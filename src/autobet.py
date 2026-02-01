@@ -137,26 +137,39 @@ class AutobetEngine:
 
         # REAL EXECUTION (OPTIONAL)
         if self.cfg.real_execution:
+            self.logger.info("Real execution ENABLED. Proceeding to place bets...")
             await self._execute_real_bets(opportunity)
+        else:
+            self.logger.info("Real execution DISABLED in config. Skipping bet placement.")
 
     async def _execute_real_bets(self, opportunity: Dict):
         """Execute real bets on both platforms."""
         try:
             # Try to initialize executors if not already done
             if not self.pm_executor or not self.cb_executor:
+                self.logger.info("Executors not initialized. Attempting to load API keys...")
                 # This requires refactoring how AutobetEngine is initialized
                 # For now, we'll try to find keys in env
                 import os
                 pm_key = os.getenv("POLYMARKET_PRIVATE_KEY")
                 cb_key = os.getenv("CLOUDBET_API_KEY")
                 
-                if pm_key and not self.pm_executor:
-                    self.pm_executor = PolymarketExecutor(pm_key)
-                if cb_key and not self.cb_executor:
-                    self.cb_executor = CloudbetExecutor(cb_key)
+                if pm_key:
+                    self.logger.info("Found POLYMARKET_PRIVATE_KEY")
+                    if not self.pm_executor:
+                        self.pm_executor = PolymarketExecutor(pm_key)
+                else:
+                    self.logger.error("MISSING POLYMARKET_PRIVATE_KEY in env")
+
+                if cb_key:
+                    self.logger.info("Found CLOUDBET_API_KEY")
+                    if not self.cb_executor:
+                        self.cb_executor = CloudbetExecutor(cb_key)
+                else:
+                    self.logger.error("MISSING CLOUDBET_API_KEY in env")
 
             if not self.pm_executor or not self.cb_executor:
-                self.logger.error("Executors not initialized - missing API keys.")
+                self.logger.error("Executors not initialized - missing API keys. Cannot place bets.")
                 return
 
             platform_a = opportunity.get('platform_a')
