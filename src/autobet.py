@@ -118,7 +118,16 @@ class AutobetEngine:
 
         guaranteed_profit = float(opportunity.get("guaranteed_profit", 0.0) or 0.0)
 
-        # Record in DB
+        # REAL EXECUTION (OPTIONAL)
+        if self.cfg.real_execution:
+            self.logger.info(f"Real execution ENABLED for {opportunity.get('market_name')}. Attempting to place bets first...")
+            execution_started = await self._execute_real_bets(opportunity)
+            
+            if not execution_started:
+                self.logger.error("Real execution failed to start. Not marking as 'Bet Taken' on dashboard.")
+                return 
+
+        # Record in DB (Only if real execution started or if real_execution is disabled)
         self.db.mark_bet_placed(
             opportunity_id=db_id,
             realized_pnl=guaranteed_profit,
@@ -130,15 +139,10 @@ class AutobetEngine:
             self._loss_today += guaranteed_profit
 
         self.logger.info(
-            f"AUTOBET TAKEN: {opportunity.get('market_name')} | "
+            f"AUTOBET SUCCESS: {opportunity.get('market_name')} | "
             f"{opportunity.get('platform_a')}/{opportunity.get('platform_b')} | "
             f"Stake=${total_capital:.2f} | PnL=${guaranteed_profit:.2f}"
         )
-
-        # REAL EXECUTION (OPTIONAL)
-        if self.cfg.real_execution:
-            self.logger.info("Real execution ENABLED. Proceeding to place bets...")
-            await self._execute_real_bets(opportunity)
         else:
             self.logger.info("Real execution DISABLED in config. Skipping bet placement.")
 
@@ -170,7 +174,7 @@ class AutobetEngine:
 
             if not self.pm_executor or not self.cb_executor:
                 self.logger.error("Executors not initialized - missing API keys. Cannot place bets.")
-                return
+                return False
 
             platform_a = opportunity.get('platform_a')
             platform_b = opportunity.get('platform_b')
@@ -196,8 +200,12 @@ class AutobetEngine:
             
             if not token_id_a:
                 self.logger.error(f"Missing Polymarket token_id for outcome '{outcome_a_name}'. Cannot execute.")
+                return False
             if not selection_id_b:
                 self.logger.error(f"Missing Cloudbet selection_id for outcome '{outcome_b_name}'. Cannot execute.")
+                return False
+
+            return True # Successfully started execution logic
 
             # Execution logic: Sequence matters. 
             # Usually Cloudbet (sportsbook) is more sensitive to odds movement.
