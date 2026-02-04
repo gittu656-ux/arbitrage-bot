@@ -3,12 +3,12 @@
 
 # Bankroll and Betting Configuration
 bankroll:
-  amount: 2000.0  # Total capital in USD
-  kelly_fraction: 0.5  # Kelly multiplier: 1.0 = full Kelly, 0.5 = half Kelly, 0.25 = quarter Kelly
+  amount: 30.0  # Actual account balance
+  kelly_fraction: 0.5
 
 # Arbitrage Detection Settings
 arbitrage:
-  min_profit_threshold: 10.0  # Minimum profit percentage to trigger alert (e.g., 0.5 = 0.5%)
+  min_profit_threshold: 0.5  # Detect 0.5%+
   polling_interval: 30  # Seconds between API polls
   similarity_threshold: 85  # Minimum similarity percentage for market matching (0-100)
 
@@ -59,9 +59,9 @@ database:
 # Autobet Configuration (REAL EXECUTION)
 autobet:
   enabled: true
-  min_profit_threshold: 10.0  # ONLY take opportunities above 10% profit
+  min_profit_threshold: 0.5  # Execute 0.5%+
   max_bets_per_day: 50
-  max_stake_fraction: 0.1     # Risk 10% of bankroll per arb
+  max_stake_fraction: 0.5     # Risk 50% ($15) of bankroll per arb
   daily_loss_limit: 100.0
   real_execution: true        # DANGER: Set to true to place real bets
   currency: "USDC"            # Default currency for betting (e.g., USDT, USDC)
