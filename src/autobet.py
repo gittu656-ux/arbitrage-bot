@@ -180,6 +180,13 @@ class AutobetEngine:
             platform_a = opportunity.get('platform_a')
             platform_b = opportunity.get('platform_b')
             
+            # DEEP DEBUG: Log the structure of market_b to see where data is
+            self.logger.debug(f"Opportunity Structure for {opportunity.get('market_name')}:")
+            self.logger.debug(f"  Platforms: {platform_a} / {platform_b}")
+            self.logger.debug(f"  Market B keys: {list(opportunity.get('market_b', {}).keys())}")
+            if 'metadata' in opportunity.get('market_b', {}):
+                self.logger.debug(f"  Market B metadata keys: {list(opportunity['market_b']['metadata'].keys())}")
+            
             # Extract IDs and parameters
             # Platform A (Polymarket)
             market_a_meta = opportunity.get('market_a', {}).get('metadata', {})
@@ -212,9 +219,12 @@ class AutobetEngine:
             if not selection_id_b:
                 market_b_outcomes = opportunity.get('market_b', {}).get('outcomes_full', [])
                 for o in market_b_outcomes:
-                    o_name = o.get('name', '').lower()
+                    # Cloudbet uses 'outcome' for the name in the raw dict
+                    o_name = (o.get('outcome') or o.get('name') or '').lower()
                     if outcome_b_name.lower() in o_name or o_name in outcome_b_name.lower():
                         selection_id_b = o.get('selection_id')
+                        if selection_id_b:
+                            self.logger.info(f"Fuzzy matched Cloudbet selection_id: {selection_id_b} for {outcome_b_name}")
                         break
 
             # PARAMETERS
