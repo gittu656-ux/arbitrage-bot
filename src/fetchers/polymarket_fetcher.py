@@ -367,13 +367,15 @@ class PolymarketFetcher:
                                     
                                     if has_vs:
                                         self.logger.debug(f"Processing event: {event_title} (ID: {event_id})")
-                                        # Try to get outcomes from main game market first
+                                        # Try to get outcomes and token IDs from main game market first
                                         outcomes = []
                                         outcome_prices = []
+                                        clob_token_ids = []
                                         
                                         if main_game_market:
                                             outcomes = main_game_market.get('outcomes', [])
                                             outcome_prices = main_game_market.get('outcomePrices', [])
+                                            clob_token_ids = main_game_market.get('clobTokenIds', [])
                                         
                                         # If main game market didn't have valid outcomes, try other markets
                                         if not outcomes:
@@ -383,6 +385,7 @@ class PolymarketFetcher:
                                                 if any(team in market_title.lower() for team in event_title.lower().split()):
                                                     outcomes = market.get('outcomes', [])
                                                     outcome_prices = market.get('outcomePrices', [])
+                                                    clob_token_ids = market.get('clobTokenIds', [])
                                                     if outcomes:  # Only need outcomes, prices can be invalid
                                                         break
                                         
@@ -413,6 +416,7 @@ class PolymarketFetcher:
                                                 'slug': event.get('slug', ''),
                                                 'outcomes': outcomes if isinstance(outcomes, list) else [],
                                                 'outcomePrices': outcome_prices if isinstance(outcome_prices, list) else [],
+                                                'clobTokenIds': clob_token_ids if isinstance(clob_token_ids, (list, str)) else [],
                                                 'active': event.get('active', True),
                                                 'closed': event.get('closed', False),
                                                 'startDate': event.get('startDate'),
