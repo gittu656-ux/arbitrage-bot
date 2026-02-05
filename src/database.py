@@ -207,6 +207,21 @@ class ArbitrageDatabase:
             market_name, platform_a, platform_b, odds_a, odds_b
         )
         
+        # Check if this exact opportunity exists and its status
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT id, bet_placed FROM arbitrage_events WHERE opportunity_hash = ?",
+                (opportunity_hash,)
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                existing_id, bet_placed = row
+                if bet_placed == 1:
+                    return None  # Truly a duplicate of a completed bet
+                else:
+                    return existing_id  # Return existing ID to allow retry of unplaced bet
+        
+        # If it doesn't exist, check for similar (odds change) logic in is_duplicate
         if self.is_duplicate(market_name, platform_a, platform_b, odds_a, odds_b):
             return None
         
