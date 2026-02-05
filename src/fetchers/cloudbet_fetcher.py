@@ -39,7 +39,16 @@ class CloudbetFetcher:
             timeout=timeout,
             headers={
                 "X-API-Key": api_key,
-                "Accept": "application/json"
+                "Accept": "application/json",
+                # Browser-like headers to bypass Cloudflare WAF
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Origin": "https://www.cloudbet.com",
+                "Referer": "https://www.cloudbet.com/",
+                "Sec-Fetch-Dest": "empty",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Site": "same-site"
             },
             follow_redirects=True
         )
