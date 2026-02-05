@@ -391,6 +391,7 @@ class ArbitrageBot:
 
                 # Autobet (simulation / bookkeeping only) if enabled
                 try:
+                    self.logger.debug(f"Calling autobet engine for: {opportunity['market_name']}")
                     await self.autobet_engine.autobet_opportunity(opportunity, db_id)
                 except Exception as e:
                     self.logger.error(f"Error in autobet engine: {e}", exc_info=True)

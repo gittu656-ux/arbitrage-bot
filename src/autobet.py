@@ -59,17 +59,19 @@ class AutobetEngine:
     def should_autobet(self, opportunity: Dict) -> bool:
         """Apply cheap risk filters before attempting to autobet."""
         if not self.cfg.enabled:
+            self.logger.debug("Autobet skipped - engine disabled in config")
             return False
 
         self._reset_daily_counters_if_needed()
 
         profit_pct = opportunity.get("profit_percentage", 0.0)
         if profit_pct < self.cfg.min_profit_threshold:
+            self.logger.debug(f"Autobet skipped - profit {profit_pct:.2f}% < threshold {self.cfg.min_profit_threshold}%")
             return False
 
         # STRICTLY Arbitrage Only (Both bets) as requested
         if opportunity.get('type') != 'arbitrage':
-            # self.logger.debug("Skipping non-arbitrage opportunity (Value Edge)") 
+            self.logger.debug(f"Autobet skipped - not an arbitrage opportunity (Type: {opportunity.get('type')})") 
             return False
 
         if self.cfg.max_bets_per_day and self._bets_today >= self.cfg.max_bets_per_day:
@@ -78,8 +80,6 @@ class AutobetEngine:
             )
             return False
 
-        # For arbitrage, guaranteed_profit should be >= 0. We still track a
-        # "loss" bucket to guard against any operational issues.
         if self.cfg.daily_loss_limit > 0 and self._loss_today <= -self.cfg.daily_loss_limit:
             self.logger.warning(
                 "Autobet disabled for today - daily loss limit reached "
@@ -96,6 +96,7 @@ class AutobetEngine:
         This does not talk to any external sportsbook/exchange. It simply
         records that, according to our model, we would have taken this bet.
         """
+        self.logger.info(f"Evaluating autobet for: {opportunity.get('market_name')} (Profit: {opportunity.get('profit_percentage', 0):.2f}%)")
         if not self.should_autobet(opportunity):
             return
 
