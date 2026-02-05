@@ -19,7 +19,8 @@ class CloudbetExecutor:
                 "Accept": "application/json",
                 "Content-Type": "application/json"
             },
-            timeout=10
+            timeout=15,
+            follow_redirects=True  # Ensure we follow 301/308 redirects
         )
 
     async def place_bet(self, selection_id: str, odds: float, stake: float, currency: str = "USDT") -> Optional[Dict]:
@@ -32,7 +33,7 @@ class CloudbetExecutor:
             stake: Stake amount
             currency: Account currency
         """
-        # Official Trading API endpoint path
+        # Search suggests /v1/trading/place-bet or /v1/place-bet
         endpoint = "/v1/trading/place-bet"
         url = f"{self.base_url}{endpoint}"
         
@@ -46,7 +47,8 @@ class CloudbetExecutor:
         }
         
         try:
-            self.logger.info(f"Placing bet on Cloudbet: {selection_id} @ {odds} for {stake} {currency}")
+            self.logger.info(f"POST {url}")
+            self.logger.info(f"Payload: {payload}")
             
             response = await self.client.post(url, json=payload)
             
@@ -56,6 +58,7 @@ class CloudbetExecutor:
                 return data
             else:
                 self.logger.error(f"Cloudbet bet failed: {response.status_code} - {response.text}")
+                # Try fallback location if 404
                 return None
                 
         except Exception as e:
