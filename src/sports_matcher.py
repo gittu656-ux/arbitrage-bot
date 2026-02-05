@@ -539,6 +539,7 @@ class SportEventMatcher:
                         # Overwrite with exact moneyline if we had a different version
                         old_odds = events[event_name]['outcomes'][outcome_name]
                         events[event_name]['outcomes'][outcome_name] = odds
+                        events[event_name]['selection_ids'][outcome_name] = outcome.get('selection_id')
                         if abs(old_odds - odds) > 0.1:  # Log if odds changed significantly
                             self.logger.debug(
                                 f"Updated moneyline odds for '{event_name}' {outcome_name}: "

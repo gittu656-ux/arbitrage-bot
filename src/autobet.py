@@ -181,11 +181,13 @@ class AutobetEngine:
             platform_b = opportunity.get('platform_b')
             
             # DEEP DEBUG: Log the structure of market_b to see where data is
-            self.logger.debug(f"Opportunity Structure for {opportunity.get('market_name')}:")
-            self.logger.debug(f"  Platforms: {platform_a} / {platform_b}")
-            self.logger.debug(f"  Market B keys: {list(opportunity.get('market_b', {}).keys())}")
+            self.logger.info(f"Opportunity Structure for {opportunity.get('market_name')}:")
+            self.logger.info(f"  Platforms: {platform_a} / {platform_b}")
+            self.logger.info(f"  Market B keys: {list(opportunity.get('market_b', {}).keys())}")
             if 'metadata' in opportunity.get('market_b', {}):
-                self.logger.debug(f"  Market B metadata keys: {list(opportunity['market_b']['metadata'].keys())}")
+                self.logger.info(f"  Market B metadata keys: {list(opportunity['market_b']['metadata'].keys())}")
+            else:
+                self.logger.warning(f"  Market B is MISSING metadata! Entire dict: {opportunity.get('market_b')}")
             
             # Extract IDs and parameters
             # Platform A (Polymarket)
