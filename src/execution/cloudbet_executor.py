@@ -21,7 +21,7 @@ class CloudbetExecutor:
                 # Browser-like headers to bypass Cloudflare WAF
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept-Language": "en-US,en;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
+                # Removed Accept-Encoding to avoid Brotli compression issues
                 "Origin": "https://www.cloudbet.com",
                 "Referer": "https://www.cloudbet.com/",
                 "Sec-Fetch-Dest": "empty",
@@ -71,15 +71,30 @@ class CloudbetExecutor:
             response = await self.client.post(url, json=payload)
             
             if response.status_code in (200, 201):
-                data = response.json()
-                self.logger.info(f"Cloudbet bet placed successfully: {data.get('status')}")
-                return data
+                try:
+                    data = response.json()
+                    self.logger.info(f"Cloudbet bet placed successfully: {data.get('status')}")
+                    return data
+                except Exception as json_err:
+                    self.logger.error(f"Failed to parse success response: {json_err}")
+                    return None
             else:
-                self.logger.error(f"Cloudbet bet failed: {response.status_code} - {response.text}")
+                # Try to get error message safely
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get('message', error_data.get('error', str(error_data)))
+                except:
+                    # If JSON parsing fails, try text
+                    try:
+                        error_msg = response.text[:200]  # Limit to first 200 chars
+                    except:
+                        error_msg = f"Status {response.status_code} (unable to decode response)"
+                
+                self.logger.error(f"Cloudbet bet failed: {response.status_code} - {error_msg}")
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Error placing Cloudbet bet: {e}")
+            self.logger.error(f"Error placing Cloudbet bet: {e}", exc_info=True)
             return None
 
     async def close(self):
