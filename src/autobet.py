@@ -216,6 +216,26 @@ class AutobetEngine:
                     if sid_name.lower() in outcome_b_name.lower() or outcome_b_name.lower() in sid_name.lower():
                         selection_id_b = sid_val
                         break
+            
+            # Fallback 1.5: Direct Home/Away mapping for Cloudbet (if team name lookup failed)
+            if not selection_id_b and 'cloudbet' in platform_b.lower():
+                cb_teams = opportunity.get('cb_teams', [])
+                if cb_teams and len(cb_teams) >= 2:
+                    from rapidfuzz import fuzz
+                    # Compare outcome_b_name to both teams in the pair
+                    sim0 = fuzz.ratio(outcome_b_name.lower(), cb_teams[0].lower())
+                    sim1 = fuzz.ratio(outcome_b_name.lower(), cb_teams[1].lower())
+                    
+                    if sim0 > sim1 and sim0 > 70:
+                        # Outcome matches first team (usually Home)
+                        selection_id_b = selection_ids_b_all.get('home') or selection_ids_b_all.get('h') or selection_ids_b_all.get('1')
+                        if selection_id_b:
+                            self.logger.info(f"Mapped {outcome_b_name} to 'home' selection_id: {selection_id_b}")
+                    elif sim1 > sim0 and sim1 > 70:
+                        # Outcome matches second team (usually Away)
+                        selection_id_b = selection_ids_b_all.get('away') or selection_ids_b_all.get('a') or selection_ids_b_all.get('2')
+                        if selection_id_b:
+                            self.logger.info(f"Mapped {outcome_b_name} to 'away' selection_id: {selection_id_b}")
 
             # Fallback 2: search in outcomes_full if still not found
             if not selection_id_b:
