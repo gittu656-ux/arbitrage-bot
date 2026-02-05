@@ -9,7 +9,7 @@ except ImportError:
 class CloudbetExecutor:
     """Handles bet placement on Cloudbet Trading API."""
     
-    def __init__(self, api_key: str, base_url: str = "https://api.cloudbet.com"):
+    def __init__(self, api_key: str, base_url: str = "https://sports-api.cloudbet.com"):
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
         self.logger = setup_logger("cloudbet_executor")
@@ -19,46 +19,53 @@ class CloudbetExecutor:
                 "Accept": "application/json",
                 "Content-Type": "application/json"
             },
-            timeout=15,
-            follow_redirects=True  # Ensure we follow 301/308 redirects
+            timeout=10
         )
 
-    async def place_bet(self, selection_id: str, odds: float, stake: float, currency: str = "USDT") -> Optional[Dict]:
+    async def place_bet(
+        self, 
+        event_id: str, 
+        market_url: str, 
+        odds: float, 
+        stake: float, 
+        currency: str = "USDT"
+    ) -> Optional[Dict]:
         """
-        Place a bet on Cloudbet.
+        Place a bet on Cloudbet V3 API.
         
         Args:
-            selection_id: Outcome/Selection ID
-            odds: Expected decimal odds
+            event_id: Cloudbet Event ID
+            market_url: Cloudbet Market URL (e.g. soccer.winner/home)
+            odds: Expected decimal odds (price)
             stake: Stake amount
             currency: Account currency
         """
-        # Search suggests /v1/trading/place-bet or /v1/place-bet
-        endpoint = "/v1/trading/place-bet"
+        # Endpoint from official wiki: https://cloudbet.github.io/wiki/en/docs/sports/api/examples/#place-bet-request
+        endpoint = "/pub/v3/bets/place"
         url = f"{self.base_url}{endpoint}"
         
-        # Cloudbet requires a unique referenceId for idempotency
+        # Cloudbet V3 requires specific payload fields
         payload = {
-            "referenceId": str(uuid.uuid4()),
+            "acceptPriceChange": "BETTER",
             "currency": currency,
-            "stake": stake,
-            "odds": odds,
-            "selectionId": selection_id
+            "eventId": str(event_id),
+            "marketUrl": market_url,
+            "price": str(odds), # Cloudbet V3 likes strings for price/stake
+            "referenceId": str(uuid.uuid4()),
+            "stake": str(stake)
         }
         
         try:
-            self.logger.info(f"POST {url}")
-            self.logger.info(f"Payload: {payload}")
+            self.logger.info(f"Placing bet on Cloudbet: {market_url} for Event {event_id} @ {odds} for {stake} {currency}")
             
             response = await self.client.post(url, json=payload)
             
-            if response.status_code == 200:
+            if response.status_code in (200, 201):
                 data = response.json()
-                self.logger.info(f"Cloudbet bet placed successfully: {data.get('betId')}")
+                self.logger.info(f"Cloudbet bet placed successfully: {data.get('status')}")
                 return data
             else:
                 self.logger.error(f"Cloudbet bet failed: {response.status_code} - {response.text}")
-                # Try fallback location if 404
                 return None
                 
         except Exception as e:

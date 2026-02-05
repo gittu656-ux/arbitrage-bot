@@ -115,7 +115,6 @@ class ArbitrageDatabase:
     ) -> bool:
         """
         Check if an arbitrage opportunity has already been recorded.
-        Now allows re-processing if odds have changed significantly (>5%).
         
         Args:
             market_name: Name of the market
@@ -125,50 +124,18 @@ class ArbitrageDatabase:
             odds_b: Odds on platform B
         
         Returns:
-            True if duplicate (same odds within 5%), False otherwise
+            True if duplicate, False otherwise
         """
-        # First check exact hash match (fastest path)
         opportunity_hash = self._generate_opportunity_hash(
             market_name, platform_a, platform_b, odds_a, odds_b
         )
+        
         with self._get_connection() as conn:
             cursor = conn.execute(
-                "SELECT bet_placed FROM arbitrage_events WHERE opportunity_hash = ?",
+                "SELECT 1 FROM arbitrage_events WHERE opportunity_hash = ?",
                 (opportunity_hash,)
             )
-            row = cursor.fetchone()
-            if row is not None:
-                # If bet was already placed, it's a true duplicate
-                if row[0] == 1:
-                    return True
-                # If bet was NOT placed (bet_placed=0), allow re-processing 
-                # to give autobet another chance (e.g. if API was down or keys missing)
-                return False
-            
-            # Check if similar opportunity exists (same market + platforms, different odds)
-            # Allow re-processing if odds changed by more than 5%
-            cursor = conn.execute(
-                """SELECT odds_a, odds_b FROM arbitrage_events 
-                   WHERE market_name = ? AND platform_a = ? AND platform_b = ?
-                   ORDER BY timestamp DESC LIMIT 1""",
-                (market_name, platform_a, platform_b)
-            )
-            result = cursor.fetchone()
-            
-            if result is None:
-                return False  # No previous record for this market
-            
-            prev_odds_a, prev_odds_b = result
-            
-            # Calculate percentage change in odds
-            odds_a_change = abs(odds_a - prev_odds_a) / prev_odds_a if prev_odds_a > 0 else 1.0
-            odds_b_change = abs(odds_b - prev_odds_b) / prev_odds_b if prev_odds_b > 0 else 1.0
-            
-            # If either odds changed by more than 5%, treat as new opportunity
-            if odds_a_change > 0.05 or odds_b_change > 0.05:
-                return False  # Significant change - allow re-processing
-            
-            return True  # Odds too similar - skip as duplicate
+            return cursor.fetchone() is not None
     
     def insert_opportunity(
         self,
@@ -207,21 +174,6 @@ class ArbitrageDatabase:
             market_name, platform_a, platform_b, odds_a, odds_b
         )
         
-        # Check if this exact opportunity exists and its status
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "SELECT id, bet_placed FROM arbitrage_events WHERE opportunity_hash = ?",
-                (opportunity_hash,)
-            )
-            row = cursor.fetchone()
-            if row is not None:
-                existing_id, bet_placed = row
-                if bet_placed == 1:
-                    return None  # Truly a duplicate of a completed bet
-                else:
-                    return existing_id  # Return existing ID to allow retry of unplaced bet
-        
-        # If it doesn't exist, check for similar (odds change) logic in is_duplicate
         if self.is_duplicate(market_name, platform_a, platform_b, odds_a, odds_b):
             return None
         

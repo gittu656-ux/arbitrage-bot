@@ -268,29 +268,38 @@ class CloudbetFetcher:
                         continue
 
                     # Extract outcome name
-                    outcome_name = selection.get('outcome', selection.get('name', 'Unknown'))
+                    outcome_slug = selection.get('outcome', selection.get('name', 'Unknown'))
+                    
+                    # Build marketUrl as required by V3 Trading API
+                    # Format: <market_key>/<outcome>?<grouping_parameters>
+                    params = selection.get('params')
+                    market_url = f"{market_type_key}/{outcome_slug}"
+                    if params:
+                        market_url += f"?{params}"
 
-                    # Build URL
-                    url = f"https://www.cloudbet.com/en/sports/{sport_key}"
+                    # Build display URL
+                    display_url = f"https://www.cloudbet.com/en/sports/{sport_key}"
                     if competition_key:
-                        url += f"/{competition_key}"
+                        display_url += f"/{competition_key}"
                     if event_id:
-                        url += f"/{event_id}"
+                        display_url += f"/{event_id}"
 
                     outcomes.append({
                         'platform': 'cloudbet',
                         'event_name': event_name,
                         'market_name': event_name,  # Use event name as market name
                         'market_type': market_type_key,
-                        'outcome': outcome_name,
+                        'outcome': outcome_slug,
                         'odds': decimal_odds,
-                        'url': url,
+                        'url': display_url,
                         'start_time': start_time,
                         'event_status': event_status,
                         'sport_key': sport_key,
                         'competition_key': competition_key,
-                        'selection_id': selection.get('id') or selection.get('key') or selection.get('outcome'),
-                        'market_id': event_id
+                        'selection_id': selection.get('id') or selection.get('key') or outcome_slug,
+                        'market_id': event_id,
+                        'market_url': market_url,
+                        'event_id': event_id
                     })
 
                     self.stats['outcomes_fetched'] += 1

@@ -372,14 +372,10 @@ class EventMatcher:
                         'platform': 'cloudbet',
                         'event_name': cb_event_name,
                         'outcomes': cb_event_data['outcomes'],
-                        'outcomes_full': cb_event_data.get('outcomes_full', []),
                         'url': cb_event_data.get('url', ''),
                         'start_time': cb_event_data.get('start_time'),
                         'sport_key': cb_sport,
-                        'competition_key': cb_event_data.get('competition_key'),
-                        'metadata': {
-                            'selection_ids': cb_event_data.get('selection_ids', {})
-                        }
+                        'competition_key': cb_event_data.get('competition_key')
                     },
                     'pm_teams': pm_teams,
                     'cb_teams': cb_teams,

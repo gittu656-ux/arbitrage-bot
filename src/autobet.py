@@ -59,19 +59,17 @@ class AutobetEngine:
     def should_autobet(self, opportunity: Dict) -> bool:
         """Apply cheap risk filters before attempting to autobet."""
         if not self.cfg.enabled:
-            self.logger.debug("Autobet skipped - engine disabled in config")
             return False
 
         self._reset_daily_counters_if_needed()
 
         profit_pct = opportunity.get("profit_percentage", 0.0)
         if profit_pct < self.cfg.min_profit_threshold:
-            self.logger.debug(f"Autobet skipped - profit {profit_pct:.2f}% < threshold {self.cfg.min_profit_threshold}%")
             return False
 
         # STRICTLY Arbitrage Only (Both bets) as requested
         if opportunity.get('type') != 'arbitrage':
-            self.logger.debug(f"Autobet skipped - not an arbitrage opportunity (Type: {opportunity.get('type')})") 
+            # self.logger.debug("Skipping non-arbitrage opportunity (Value Edge)") 
             return False
 
         if self.cfg.max_bets_per_day and self._bets_today >= self.cfg.max_bets_per_day:
@@ -80,6 +78,8 @@ class AutobetEngine:
             )
             return False
 
+        # For arbitrage, guaranteed_profit should be >= 0. We still track a
+        # "loss" bucket to guard against any operational issues.
         if self.cfg.daily_loss_limit > 0 and self._loss_today <= -self.cfg.daily_loss_limit:
             self.logger.warning(
                 "Autobet disabled for today - daily loss limit reached "
@@ -89,14 +89,13 @@ class AutobetEngine:
 
         return True
 
-    async def autobet_opportunity(self, opportunity: Dict, db_id: int) -> None:
+    def autobet_opportunity(self, opportunity: Dict, db_id: int) -> None:
         """
         Mark an opportunity as bet-taken, respecting risk limits.
 
         This does not talk to any external sportsbook/exchange. It simply
         records that, according to our model, we would have taken this bet.
         """
-        self.logger.info(f"Evaluating autobet for: {opportunity.get('market_name')} (Profit: {opportunity.get('profit_percentage', 0):.2f}%)")
         if not self.should_autobet(opportunity):
             return
 
@@ -119,18 +118,7 @@ class AutobetEngine:
 
         guaranteed_profit = float(opportunity.get("guaranteed_profit", 0.0) or 0.0)
 
-        # REAL EXECUTION (OPTIONAL)
-        if self.cfg.real_execution:
-            self.logger.info(f"Real execution ENABLED for {opportunity.get('market_name')}. Attempting to place bets first...")
-            execution_started = await self._execute_real_bets(opportunity)
-            
-            if not execution_started:
-                self.logger.error("Real execution failed to start. Not marking as 'Bet Taken' on dashboard.")
-                return 
-        else:
-            self.logger.info("Real execution DISABLED in config. Skipping real money placement.")
-
-        # Record in DB (Only if real execution started or if real_execution is disabled)
+        # Record in DB
         self.db.mark_bet_placed(
             opportunity_id=db_id,
             realized_pnl=guaranteed_profit,
@@ -142,163 +130,102 @@ class AutobetEngine:
             self._loss_today += guaranteed_profit
 
         self.logger.info(
-            f"AUTOBET SUCCESS: {opportunity.get('market_name')} | "
+            f"AUTOBET TAKEN: {opportunity.get('market_name')} | "
             f"{opportunity.get('platform_a')}/{opportunity.get('platform_b')} | "
             f"Stake=${total_capital:.2f} | PnL=${guaranteed_profit:.2f}"
         )
+
+        # REAL EXECUTION (OPTIONAL)
+        if self.cfg.real_execution:
+            import asyncio
+            asyncio.create_task(self._execute_real_bets(opportunity))
 
     async def _execute_real_bets(self, opportunity: Dict):
         """Execute real bets on both platforms."""
         try:
             # Try to initialize executors if not already done
             if not self.pm_executor or not self.cb_executor:
-                self.logger.info("Executors not initialized. Attempting to load API keys...")
                 # This requires refactoring how AutobetEngine is initialized
                 # For now, we'll try to find keys in env
                 import os
                 pm_key = os.getenv("POLYMARKET_PRIVATE_KEY")
                 cb_key = os.getenv("CLOUDBET_API_KEY")
                 
-                if pm_key:
-                    self.logger.info("Found POLYMARKET_PRIVATE_KEY")
-                    if not self.pm_executor:
-                        self.pm_executor = PolymarketExecutor(pm_key)
-                else:
-                    self.logger.error("MISSING POLYMARKET_PRIVATE_KEY in env")
-
-                if cb_key:
-                    self.logger.info("Found CLOUDBET_API_KEY")
-                    if not self.cb_executor:
-                        self.cb_executor = CloudbetExecutor(cb_key)
-                else:
-                    self.logger.error("MISSING CLOUDBET_API_KEY in env")
+                if pm_key and not self.pm_executor:
+                    self.pm_executor = PolymarketExecutor(pm_key)
+                if cb_key and not self.cb_executor:
+                    self.cb_executor = CloudbetExecutor(cb_key)
 
             if not self.pm_executor or not self.cb_executor:
-                self.logger.error("Executors not initialized - missing API keys. Cannot place bets.")
-                return False
+                self.logger.error("Executors not initialized - missing API keys.")
+                return
 
             platform_a = opportunity.get('platform_a')
             platform_b = opportunity.get('platform_b')
             
-            # DEEP DEBUG: Log the structure of market_b to see where data is
-            self.logger.info(f"Opportunity Structure for {opportunity.get('market_name')}:")
-            self.logger.info(f"  Platforms: {platform_a} / {platform_b}")
-            self.logger.info(f"  Market B keys: {list(opportunity.get('market_b', {}).keys())}")
-            if 'metadata' in opportunity.get('market_b', {}):
-                self.logger.info(f"  Market B metadata keys: {list(opportunity['market_b']['metadata'].keys())}")
-            else:
-                self.logger.warning(f"  Market B is MISSING metadata! Entire dict: {opportunity.get('market_b')}")
-            
             # Extract IDs and parameters
-            # Platform A (Polymarket)
+            # Platform A
             market_a_meta = opportunity.get('market_a', {}).get('metadata', {})
-            outcome_a_name = opportunity.get('outcome_a', {}).get('name', '')
-            token_ids_a = market_a_meta.get('token_ids', {})
-            token_id_a = token_ids_a.get(outcome_a_name)
-            
-            # Fuzzy match fallback for Polymarket
-            if not token_id_a and token_ids_a:
-                for tid_name, tid_val in token_ids_a.items():
-                    if tid_name.lower() in outcome_a_name.lower() or outcome_a_name.lower() in tid_name.lower():
-                        token_id_a = tid_val
-                        break
-
-            # Platform B (Cloudbet)
-            market_b_meta = opportunity.get('market_b', {}).get('metadata', {})
-            outcome_b_name = opportunity.get('outcome_b', {}).get('name', '')
-            # Try to get from metadata dict first
-            selection_ids_b_all = market_b_meta.get('selection_ids', {})
-            selection_id_b = selection_ids_b_all.get(outcome_b_name)
-            
-            # Fuzzy match fallback for Cloudbet
-            if not selection_id_b:
-                for sid_name, sid_val in selection_ids_b_all.items():
-                    if sid_name.lower() in outcome_b_name.lower() or outcome_b_name.lower() in sid_name.lower():
-                        selection_id_b = sid_val
-                        break
-            
-            # Fallback 1.5: Direct Home/Away mapping for Cloudbet (if team name lookup failed)
-            if not selection_id_b and 'cloudbet' in platform_b.lower():
-                cb_teams = opportunity.get('cb_teams', [])
-                if cb_teams and len(cb_teams) >= 2:
-                    from rapidfuzz import fuzz
-                    # Compare outcome_b_name to both teams in the pair
-                    sim0 = fuzz.ratio(outcome_b_name.lower(), cb_teams[0].lower())
-                    sim1 = fuzz.ratio(outcome_b_name.lower(), cb_teams[1].lower())
-                    
-                    if sim0 > sim1 and sim0 > 70:
-                        # Outcome matches first team (usually Home)
-                        selection_id_b = selection_ids_b_all.get('home') or selection_ids_b_all.get('h') or selection_ids_b_all.get('1')
-                        if selection_id_b:
-                            self.logger.info(f"Mapped {outcome_b_name} to 'home' selection_id: {selection_id_b}")
-                    elif sim1 > sim0 and sim1 > 70:
-                        # Outcome matches second team (usually Away)
-                        selection_id_b = selection_ids_b_all.get('away') or selection_ids_b_all.get('a') or selection_ids_b_all.get('2')
-                        if selection_id_b:
-                            self.logger.info(f"Mapped {outcome_b_name} to 'away' selection_id: {selection_id_b}")
-
-            # Fallback 2: search in outcomes_full if still not found
-            if not selection_id_b:
-                market_b_outcomes = opportunity.get('market_b', {}).get('outcomes_full', [])
-                for o in market_b_outcomes:
-                    # Cloudbet uses 'outcome' for the name in the raw dict
-                    o_name = (o.get('outcome') or o.get('name') or '').lower()
-                    if outcome_b_name.lower() in o_name or o_name in outcome_b_name.lower():
-                        selection_id_b = o.get('selection_id')
-                        if selection_id_b:
-                            self.logger.info(f"Fuzzy matched Cloudbet selection_id: {selection_id_b} for {outcome_b_name}")
-                        break
-
-            # PARAMETERS
+            outcome_a_name = opportunity.get('outcome_a', {}).get('name')
+            token_id_a = market_a_meta.get('token_ids', {}).get(outcome_a_name)
             odds_a = opportunity.get('odds_a')
             stake_a = opportunity.get('bet_amount_a')
+
+            # Platform B (Cloudbet)
+            outcome_b = opportunity.get('outcome_b', {})
+            outcome_b_name = outcome_b.get('name')
             odds_b = opportunity.get('odds_b')
             stake_b = opportunity.get('bet_amount_b')
+            
+            # Check for V3 metadata (Sports Event Matcher)
+            event_id_b = outcome_b.get('event_id')
+            market_url_b = outcome_b.get('market_url')
+            
+            # Fallback for Legacy Matcher (Regular Market Matcher)
+            if not event_id_b or not market_url_b:
+                market_b_meta = opportunity.get('market_b', {}).get('metadata', {})
+                # Try to get selection ID and map it
+                selection_id_b = market_b_meta.get('selection_ids', {}).get(outcome_b_name)
+                if selection_id_b:
+                    # For legacy, we might still need to construct a marketUrl or use a different endpoint
+                    # But since V3 is our primary now, we prioritize event_id/market_url
+                    pass
 
             self.logger.info(f"STARTING REAL EXECUTION for arbitrage: {opportunity.get('market_name')}")
-            self.logger.debug(f"Extracted IDs - Polymarket: {token_id_a}, Cloudbet: {selection_id_b}")
-
-            if not token_id_a:
-                self.logger.error(f"Missing Polymarket token_id for '{outcome_a_name}'. Available: {list(token_ids_a.keys())}")
-                return False
-            if not selection_id_b:
-                self.logger.error(f"Missing Cloudbet selection_id for '{outcome_b_name}'. Available: {list(selection_ids_b_all.keys())}")
-                return False
 
             # Execution logic: Sequence matters. 
-            # Usually Cloudbet (sportsbook) is more sensitive to odds movement.
-            # But Polymarket (exchange) can have liquidity issues.
-            
             # 1. Place bet on Platform B (Cloudbet)
             success_b = False
-            if selection_id_b:
-                # Use the configured currency
-                currency = getattr(self.cfg, 'currency', 'USDT')
-                self.logger.info(f"Placing bet on Cloudbet using currency: {currency}")
-                resp_b = await self.cb_executor.place_bet(selection_id_b, odds_b, stake_b, currency=currency)
+            if event_id_b and market_url_b:
+                self.logger.info(f"Executing Cloudbet V3 Bet: {market_url_b} on event {event_id_b}")
+                resp_b = await self.cb_executor.place_bet(
+                    event_id=event_id_b, 
+                    market_url=market_url_b, 
+                    odds=odds_b, 
+                    stake=stake_b
+                )
                 if resp_b:
                     success_b = True
-                    self.logger.info("Successfully placed bet on Cloudbet")
+                    self.logger.info("Successfully placed bet on Cloudbet V3")
                 else:
                     self.logger.error("Failed to place bet on Cloudbet. ABORTING hedge.")
-                    return False # ABORT to avoid unhedged position
-            
+                    return 
+            else:
+                self.logger.error("Cloudbet execution failed: Missing event_id or market_url")
+                return
+
             # 2. Place bet on Platform A (Polymarket)
             if success_b and token_id_a:
                 # Convert decimal odds to price (e.g. 2.0 -> 0.5)
                 price_a = 1.0 / odds_a
+                self.logger.info(f"Executing Polymarket hedge: {outcome_a_name} @ {price_a:.4f}")
                 resp_a = await self.pm_executor.place_order(token_id_a, price_a, "BUY", stake_a)
                 if resp_a:
                     self.logger.info("Successfully placed hedge order on Polymarket")
-                    return True
                 else:
                     self.logger.critical(f"FAILED TO HEDGE on Polymarket! You have an unhedged bet on Cloudbet for ${stake_b}")
-                    return True # Still return True because Cloudbet bet was placed
-            
-            return False
             
         except Exception as e:
             self.logger.error(f"Error in real execution: {e}", exc_info=True)
-            return False
 
 

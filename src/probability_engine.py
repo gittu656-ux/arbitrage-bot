@@ -183,7 +183,13 @@ class ProbabilityEngine:
         team_probs = {}
         
         # First, try to match outcomes directly to team names
-        for outcome_name, odds in cb_outcomes.items():
+        for outcome_name, outcome_data in cb_outcomes.items():
+            # Handle both old float format and new dict format
+            if isinstance(outcome_data, dict):
+                odds = outcome_data.get('odds', 0.0)
+            else:
+                odds = outcome_data
+                
             if odds <= 1.0:
                 continue
                 
@@ -210,16 +216,28 @@ class ProbabilityEngine:
             
             # Lower threshold to 60% for more matches
             if best_match1 > best_match2 and best_match1 > 60:
-                team_probs[cb_teams[0]] = prob
+                team_probs[cb_teams[0]] = {
+                    'prob': prob,
+                    'data': outcome_data if isinstance(outcome_data, dict) else {'odds': odds}
+                }
             elif best_match2 > best_match1 and best_match2 > 60:
-                team_probs[cb_teams[1]] = prob
+                team_probs[cb_teams[1]] = {
+                    'prob': prob,
+                    'data': outcome_data if isinstance(outcome_data, dict) else {'odds': odds}
+                }
             # If neither matches well, try "home"/"away"/"team1"/"team2" mapping
             elif outcome_norm in ['home', 'h', 'team1', '1'] and cb_teams[0]:
                 # Assume first team is home/team1
-                team_probs[cb_teams[0]] = prob
+                team_probs[cb_teams[0]] = {
+                    'prob': prob,
+                    'data': outcome_data if isinstance(outcome_data, dict) else {'odds': odds}
+                }
             elif outcome_norm in ['away', 'a', 'team2', '2'] and cb_teams[1]:
                 # Assume second team is away/team2
-                team_probs[cb_teams[1]] = prob
+                team_probs[cb_teams[1]] = {
+                    'prob': prob,
+                    'data': outcome_data if isinstance(outcome_data, dict) else {'odds': odds}
+                }
         
         return team_probs
     
@@ -276,8 +294,13 @@ class ProbabilityEngine:
             
             pm_prob_team1 = pm_team_probs.get(team1, 0)
             pm_prob_team2 = pm_team_probs.get(team2, 0)
-            cb_prob_team1 = cb_team_probs.get(team1, 0)
-            cb_prob_team2 = cb_team_probs.get(team2, 0)
+            
+            # Cloudbet probabilities are now in dicts
+            cb_data_team1 = cb_team_probs.get(team1, {})
+            cb_data_team2 = cb_team_probs.get(team2, {})
+            
+            cb_prob_team1 = cb_data_team1.get('prob', 0)
+            cb_prob_team2 = cb_data_team2.get('prob', 0)
             
             if not pm_prob_team1 or not pm_prob_team2 or not cb_prob_team1 or not cb_prob_team2:
                 self.logger.debug(
@@ -301,6 +324,7 @@ class ProbabilityEngine:
                 cb_team = team2  # Bet on team2 on Cloudbet (opposite)
                 pm_odds = self._probability_to_odds(pm_prob_team1)
                 cb_odds = self._probability_to_odds(cb_prob_team2)
+                cb_metadata = cb_data_team2.get('data', {})
                 pm_outcome_name = "YES" if pm_prob_team1 == max(pm_prob_team1, pm_prob_team2) else "NO"
             else:
                 total_prob = total_prob_team2
@@ -309,6 +333,7 @@ class ProbabilityEngine:
                 cb_team = team1  # Bet on team1 on Cloudbet (opposite)
                 pm_odds = self._probability_to_odds(pm_prob_team2)
                 cb_odds = self._probability_to_odds(cb_prob_team1)
+                cb_metadata = cb_data_team1.get('data', {})
                 pm_outcome_name = "NO" if pm_prob_team1 == max(pm_prob_team1, pm_prob_team2) else "YES"
             
             # Check for arbitrage
@@ -342,7 +367,13 @@ class ProbabilityEngine:
                         'start_time': match.get('cb_time'),
                         # Add team names for each platform (opposite outcomes for arbitrage)
                         'outcome_a': {'name': pm_team, 'odds': pm_odds},  # Polymarket team
-                        'outcome_b': {'name': cb_team, 'odds': cb_odds}   # Cloudbet team (opposite)
+                        'outcome_b': {
+                            'name': cb_team, 
+                            'odds': cb_odds,
+                            'event_id': cb_metadata.get('event_id'),
+                            'market_url': cb_metadata.get('market_url'),
+                            'selection_id': cb_metadata.get('selection_id')
+                        }   # Cloudbet team (opposite)
                     }
                     
                     opportunities.append(opportunity)

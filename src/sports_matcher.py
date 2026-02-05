@@ -398,14 +398,10 @@ class SportEventMatcher:
                                 'platform': platform_b,
                                 'event_name': cb_event_data['event_name'],
                                 'outcomes': cb_event_data['outcomes'],
-                                'outcomes_full': cb_event_data.get('outcomes_full', []),
                                 'url': cb_event_data['url'],
                                 'start_time': cb_event_data.get('start_time'),
                                 'sport_key': cb_event_data.get('sport_key'),
-                                'competition_key': cb_event_data.get('competition_key'),
-                                'metadata': {
-                                    'selection_ids': cb_event_data.get('selection_ids', {})
-                                }
+                                'competition_key': cb_event_data.get('competition_key')
                             },
                             'similarity': similarity,
                             'outcome_mapping': outcome_mapping,
@@ -454,10 +450,6 @@ class SportEventMatcher:
                     'event_name': event_name,
                     # Primary outcome mapping we want to use downstream
                     'outcomes': {},
-                    # Persistent selection IDs for real execution
-                    'selection_ids': {},
-                    # Full outcome objects for fallbacks
-                    'outcomes_full': [],
                     # Backup of *all* outcomes so we can gracefully fall back
                     # if an event has no recognised moneyline market.
                     '_all_outcomes': {},
@@ -473,7 +465,7 @@ class SportEventMatcher:
 
             if outcome_name and odds > 0:
                 # Always track in the backup map
-                events[event_name]['_all_outcomes'][outcome_name] = odds
+                events[event_name]['_all_outcomes'][outcome_name] = outcome
 
                 # STRICT: Only accept exact moneyline markets
                 # Cloudbet's "game lines" is too broad (includes spreads, totals, moneyline)
@@ -523,11 +515,14 @@ class SportEventMatcher:
 
                 if is_primary_moneyline:
                     # Only store if we don't already have this outcome, or if this is a better match
-                    existing_odds = events[event_name]['outcomes'].get(outcome_name)
-                    if existing_odds is None:
-                        events[event_name]['outcomes'][outcome_name] = odds
-                        events[event_name]['selection_ids'][outcome_name] = outcome.get('selection_id')
-                        events[event_name]['outcomes_full'].append(outcome)
+                    existing_data = events[event_name]['outcomes'].get(outcome_name)
+                    if existing_data is None:
+                        events[event_name]['outcomes'][outcome_name] = {
+                            'odds': odds,
+                            'event_id': outcome.get('event_id'),
+                            'market_url': outcome.get('market_url'),
+                            'selection_id': outcome.get('selection_id')
+                        }
                         # Log first time we see moneyline for this event
                         if len(events[event_name]['outcomes']) == 1:
                             self.logger.debug(
@@ -537,9 +532,13 @@ class SportEventMatcher:
                             )
                     elif market_type == 'moneyline' or market_type == 'ml':
                         # Overwrite with exact moneyline if we had a different version
-                        old_odds = events[event_name]['outcomes'][outcome_name]
-                        events[event_name]['outcomes'][outcome_name] = odds
-                        events[event_name]['selection_ids'][outcome_name] = outcome.get('selection_id')
+                        old_odds = events[event_name]['outcomes'][outcome_name]['odds']
+                        events[event_name]['outcomes'][outcome_name] = {
+                            'odds': odds,
+                            'event_id': outcome.get('event_id'),
+                            'market_url': outcome.get('market_url'),
+                            'selection_id': outcome.get('selection_id')
+                        }
                         if abs(old_odds - odds) > 0.1:  # Log if odds changed significantly
                             self.logger.debug(
                                 f"Updated moneyline odds for '{event_name}' {outcome_name}: "
@@ -618,7 +617,12 @@ class SportEventMatcher:
         cb_teams = self.detector.extract_teams_from_title(cb_event_name)
 
         pm_outcomes_list = [{'name': k, 'odds': v} for k, v in pm_outcomes.items()]
-        cb_outcomes_list = [{'name': k, 'odds': v} for k, v in cb_outcomes.items()]
+        # cb_outcomes now contains dicts with 'odds', 'event_id', etc.
+        cb_outcomes_list = []
+        for name, data in cb_outcomes.items():
+            item = data.copy()
+            item['name'] = name
+            cb_outcomes_list.append(item)
 
         # Case 1: Polymarket has YES/NO, Cloudbet has team names
         pm_has_yes_no = any(o['name'].upper() in ['YES', 'NO'] for o in pm_outcomes_list)
