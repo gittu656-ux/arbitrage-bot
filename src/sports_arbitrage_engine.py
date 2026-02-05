@@ -132,7 +132,11 @@ class SportsArbitrageEngine:
                     },
                     'outcome_b': {
                         'name': opposite_team,  # Use calculated/extracted opposite team
-                        'odds': opp['cb_odds']
+                        'odds': opp['cb_odds'],
+                        # Preserve metadata from probability_engine
+                        'event_id': existing_outcome_b.get('event_id'),
+                        'market_url': existing_outcome_b.get('market_url'),
+                        'selection_id': existing_outcome_b.get('selection_id')
                     },
                     'odds_a': opp['pm_odds'],
                     'odds_b': opp['cb_odds'],
