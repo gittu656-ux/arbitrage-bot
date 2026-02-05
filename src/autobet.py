@@ -230,7 +230,7 @@ class AutobetEngine:
                 self.logger.error(f"Missing Polymarket token_id for '{outcome_a_name}'. Available: {list(token_ids_a.keys())}")
                 return False
             if not selection_id_b:
-                self.logger.error(f"Missing Cloudbet selection_id for '{outcome_b_name}'.")
+                self.logger.error(f"Missing Cloudbet selection_id for '{outcome_b_name}'. Available: {list(selection_ids_b_all.keys())}")
                 return False
 
             # Execution logic: Sequence matters. 

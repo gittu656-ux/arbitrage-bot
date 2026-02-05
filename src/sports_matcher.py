@@ -398,10 +398,14 @@ class SportEventMatcher:
                                 'platform': platform_b,
                                 'event_name': cb_event_data['event_name'],
                                 'outcomes': cb_event_data['outcomes'],
+                                'outcomes_full': cb_event_data.get('outcomes_full', []),
                                 'url': cb_event_data['url'],
                                 'start_time': cb_event_data.get('start_time'),
                                 'sport_key': cb_event_data.get('sport_key'),
-                                'competition_key': cb_event_data.get('competition_key')
+                                'competition_key': cb_event_data.get('competition_key'),
+                                'metadata': {
+                                    'selection_ids': cb_event_data.get('selection_ids', {})
+                                }
                             },
                             'similarity': similarity,
                             'outcome_mapping': outcome_mapping,
@@ -450,6 +454,10 @@ class SportEventMatcher:
                     'event_name': event_name,
                     # Primary outcome mapping we want to use downstream
                     'outcomes': {},
+                    # Persistent selection IDs for real execution
+                    'selection_ids': {},
+                    # Full outcome objects for fallbacks
+                    'outcomes_full': [],
                     # Backup of *all* outcomes so we can gracefully fall back
                     # if an event has no recognised moneyline market.
                     '_all_outcomes': {},
@@ -518,6 +526,8 @@ class SportEventMatcher:
                     existing_odds = events[event_name]['outcomes'].get(outcome_name)
                     if existing_odds is None:
                         events[event_name]['outcomes'][outcome_name] = odds
+                        events[event_name]['selection_ids'][outcome_name] = outcome.get('selection_id')
+                        events[event_name]['outcomes_full'].append(outcome)
                         # Log first time we see moneyline for this event
                         if len(events[event_name]['outcomes']) == 1:
                             self.logger.debug(
