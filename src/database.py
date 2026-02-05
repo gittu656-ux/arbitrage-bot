@@ -132,13 +132,18 @@ class ArbitrageDatabase:
             market_name, platform_a, platform_b, odds_a, odds_b
         )
         
-        with self._get_connection() as conn:
             cursor = conn.execute(
-                "SELECT 1 FROM arbitrage_events WHERE opportunity_hash = ?",
+                "SELECT bet_placed FROM arbitrage_events WHERE opportunity_hash = ?",
                 (opportunity_hash,)
             )
-            if cursor.fetchone() is not None:
-                return True  # Exact match found
+            row = cursor.fetchone()
+            if row is not None:
+                # If bet was already placed, it's a true duplicate
+                if row[0] == 1:
+                    return True
+                # If bet was NOT placed (bet_placed=0), allow re-processing 
+                # to give autobet another chance (e.g. if API was down or keys missing)
+                return False
             
             # Check if similar opportunity exists (same market + platforms, different odds)
             # Allow re-processing if odds changed by more than 5%

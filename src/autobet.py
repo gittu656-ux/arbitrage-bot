@@ -180,29 +180,40 @@ class AutobetEngine:
             platform_b = opportunity.get('platform_b')
             
             # Extract IDs and parameters
-            # Platform A
+            # Platform A (Polymarket)
             market_a_meta = opportunity.get('market_a', {}).get('metadata', {})
             outcome_a_name = opportunity.get('outcome_a', {}).get('name')
-            token_id_a = market_a_meta.get('token_ids', {}).get(outcome_a_name)
-            odds_a = opportunity.get('odds_a')
-            stake_a = opportunity.get('bet_amount_a')
-
-            # Platform B
+            token_ids_a = market_a_meta.get('token_ids', {})
+            token_id_a = token_ids_a.get(outcome_a_name)
+            
+            # Platform B (Cloudbet)
             market_b_meta = opportunity.get('market_b', {}).get('metadata', {})
             outcome_b_name = opportunity.get('outcome_b', {}).get('name')
+            # Try to get from metadata dict first
             selection_id_b = market_b_meta.get('selection_ids', {}).get(outcome_b_name)
+            
+            # Fallback: search in outcomes_full if available
+            if not selection_id_b:
+                market_b_outcomes = opportunity.get('market_b', {}).get('outcomes_full', [])
+                for o in market_b_outcomes:
+                    if o.get('name') == outcome_b_name:
+                        selection_id_b = o.get('selection_id')
+                        break
+
+            # PARAMETERS
+            odds_a = opportunity.get('odds_a')
+            stake_a = opportunity.get('bet_amount_a')
             odds_b = opportunity.get('odds_b')
             stake_b = opportunity.get('bet_amount_b')
 
-            
-            self.logger.info(f"STARTING REAL EXECUTION for arbitrage #{opportunity.get('market_name')}")
-            self.logger.debug(f"Extracted IDs - Polymarket token_id: {token_id_a}, Cloudbet selection_id: {selection_id_b}")
-            
+            self.logger.info(f"STARTING REAL EXECUTION for arbitrage: {opportunity.get('market_name')}")
+            self.logger.debug(f"Extracted IDs - Polymarket: {token_id_a}, Cloudbet: {selection_id_b}")
+
             if not token_id_a:
-                self.logger.error(f"Missing Polymarket token_id for outcome '{outcome_a_name}'. Cannot execute.")
+                self.logger.error(f"Missing Polymarket token_id for '{outcome_a_name}'. Available: {list(token_ids_a.keys())}")
                 return False
             if not selection_id_b:
-                self.logger.error(f"Missing Cloudbet selection_id for outcome '{outcome_b_name}'. Cannot execute.")
+                self.logger.error(f"Missing Cloudbet selection_id for '{outcome_b_name}'.")
                 return False
 
             # Execution logic: Sequence matters. 
