@@ -91,10 +91,7 @@ class AutobetEngine:
 
     def autobet_opportunity(self, opportunity: Dict, db_id: int) -> None:
         """
-        Mark an opportunity as bet-taken, respecting risk limits.
-
-        This does not talk to any external sportsbook/exchange. It simply
-        records that, according to our model, we would have taken this bet.
+        Attempt to place bets on both platforms, only marking as successful if both succeed.
         """
         if not self.should_autobet(opportunity):
             return
@@ -118,30 +115,54 @@ class AutobetEngine:
 
         guaranteed_profit = float(opportunity.get("guaranteed_profit", 0.0) or 0.0)
 
-        # Record in DB
-        self.db.mark_bet_placed(
-            opportunity_id=db_id,
-            realized_pnl=guaranteed_profit,
-        )
-
-        self._bets_today += 1
-        # If something went wrong and guaranteed_profit < 0, treat it as loss
-        if guaranteed_profit < 0:
-            self._loss_today += guaranteed_profit
-
         self.logger.info(
-            f"AUTOBET TAKEN: {opportunity.get('market_name')} | "
+            f"AUTOBET ATTEMPT: {opportunity.get('market_name')} | "
             f"{opportunity.get('platform_a')}/{opportunity.get('platform_b')} | "
-            f"Stake=${total_capital:.2f} | PnL=${guaranteed_profit:.2f}"
+            f"Stake=${total_capital:.2f} | Expected PnL=${guaranteed_profit:.2f}"
         )
 
         # REAL EXECUTION (OPTIONAL)
         if self.cfg.real_execution:
             import asyncio
-            asyncio.create_task(self._execute_real_bets(opportunity))
+            # Wait for execution to complete and check if successful
+            asyncio.create_task(self._execute_and_record(opportunity, db_id, guaranteed_profit))
+        else:
+            # Simulation mode - mark as taken immediately
+            self.db.mark_bet_placed(
+                opportunity_id=db_id,
+                realized_pnl=guaranteed_profit,
+            )
+            self._bets_today += 1
+            if guaranteed_profit < 0:
+                self._loss_today += guaranteed_profit
+            self.logger.info(f"SIMULATION: Bet marked as taken (real_execution=false)")
 
-    async def _execute_real_bets(self, opportunity: Dict):
-        """Execute real bets on both platforms."""
+    async def _execute_and_record(self, opportunity: Dict, db_id: int, guaranteed_profit: float):
+        """Execute bets and only record if both succeed."""
+        success = await self._execute_real_bets(opportunity)
+        
+        if success:
+            # Both bets placed successfully - mark in database
+            self.db.mark_bet_placed(
+                opportunity_id=db_id,
+                realized_pnl=guaranteed_profit,
+            )
+            self._bets_today += 1
+            if guaranteed_profit < 0:
+                self._loss_today += guaranteed_profit
+            
+            self.logger.info(
+                f"AUTOBET SUCCESS: {opportunity.get('market_name')} | "
+                f"Both bets placed | PnL=${guaranteed_profit:.2f}"
+            )
+        else:
+            self.logger.error(
+                f"AUTOBET FAILED: {opportunity.get('market_name')} | "
+                f"One or both bets failed - NOT marked as taken"
+            )
+
+    async def _execute_real_bets(self, opportunity: Dict) -> bool:
+        """Execute real bets on both platforms. Returns True if both succeed."""
         try:
             # Try to initialize executors if not already done
             if not self.pm_executor or not self.cb_executor:
@@ -158,7 +179,7 @@ class AutobetEngine:
 
             if not self.pm_executor or not self.cb_executor:
                 self.logger.error("Executors not initialized - missing API keys.")
-                return
+                return False
 
             platform_a = opportunity.get('platform_a')
             platform_b = opportunity.get('platform_b')
@@ -209,23 +230,30 @@ class AutobetEngine:
                     self.logger.info("Successfully placed bet on Cloudbet V3")
                 else:
                     self.logger.error("Failed to place bet on Cloudbet. ABORTING hedge.")
-                    return 
+                    return False
             else:
                 self.logger.error("Cloudbet execution failed: Missing event_id or market_url")
-                return
+                return False
 
             # 2. Place bet on Platform A (Polymarket)
+            success_a = False
             if success_b and token_id_a:
                 # Convert decimal odds to price (e.g. 2.0 -> 0.5)
                 price_a = 1.0 / odds_a
                 self.logger.info(f"Executing Polymarket hedge: {outcome_a_name} @ {price_a:.4f}")
                 resp_a = await self.pm_executor.place_order(token_id_a, price_a, "BUY", stake_a)
                 if resp_a:
+                    success_a = True
                     self.logger.info("Successfully placed hedge order on Polymarket")
                 else:
                     self.logger.critical(f"FAILED TO HEDGE on Polymarket! You have an unhedged bet on Cloudbet for ${stake_b}")
+                    return False
+            
+            # Return True only if both bets succeeded
+            return success_a and success_b
             
         except Exception as e:
             self.logger.error(f"Error in real execution: {e}", exc_info=True)
+            return False
 
 

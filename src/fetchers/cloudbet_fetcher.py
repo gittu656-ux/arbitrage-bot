@@ -272,8 +272,25 @@ class CloudbetFetcher:
                     
                     # Build marketUrl as required by V3 Trading API
                     # Format: <market_key>/<outcome>?<grouping_parameters>
+                    
+                    # IMPORTANT: Fix sport-specific market types
+                    # Cloudbet sometimes returns invalid combinations (e.g., basketball.1x2)
+                    corrected_market_key = market_type_key
+                    
+                    # Basketball corrections
+                    if sport_key == 'basketball-usa-nba' or 'basketball' in sport_key:
+                        if '1x2' in market_type_key or 'winner' in market_type_key:
+                            corrected_market_key = 'basketball.match_winner'
+                        elif 'moneyline' in market_type_key:
+                            corrected_market_key = 'basketball.moneyline'
+                    
+                    # Soccer/Football - 1x2 is valid
+                    elif 'soccer' in sport_key or 'football' in sport_key:
+                        if 'winner' in market_type_key or '1x2' in market_type_key:
+                            corrected_market_key = f"{sport_key.split('-')[0]}.1x2"
+                    
                     params = selection.get('params')
-                    market_url = f"{market_type_key}/{outcome_slug}"
+                    market_url = f"{corrected_market_key}/{outcome_slug}"
                     if params:
                         market_url += f"?{params}"
 
