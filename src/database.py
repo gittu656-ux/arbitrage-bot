@@ -131,7 +131,7 @@ class ArbitrageDatabase:
         opportunity_hash = self._generate_opportunity_hash(
             market_name, platform_a, platform_b, odds_a, odds_b
         )
-        
+        with self._get_connection() as conn:
             cursor = conn.execute(
                 "SELECT bet_placed FROM arbitrage_events WHERE opportunity_hash = ?",
                 (opportunity_hash,)
