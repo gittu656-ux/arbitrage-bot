@@ -9,7 +9,7 @@ except ImportError:
 class CloudbetExecutor:
     """Handles bet placement on Cloudbet Trading API."""
     
-    def __init__(self, api_key: str, base_url: str = "https://sports-api.cloudbet.com"):
+    def __init__(self, api_key: str, base_url: str = "https://api.cloudbet.com"):
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
         self.logger = setup_logger("cloudbet_executor")
@@ -32,7 +32,8 @@ class CloudbetExecutor:
             stake: Stake amount
             currency: Account currency
         """
-        endpoint = "/v1/betting/place-bet"
+        # Official Trading API endpoint path
+        endpoint = "/v1/trading/place-bet"
         url = f"{self.base_url}{endpoint}"
         
         # Cloudbet requires a unique referenceId for idempotency
