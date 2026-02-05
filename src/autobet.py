@@ -183,21 +183,37 @@ class AutobetEngine:
             # Extract IDs and parameters
             # Platform A (Polymarket)
             market_a_meta = opportunity.get('market_a', {}).get('metadata', {})
-            outcome_a_name = opportunity.get('outcome_a', {}).get('name')
+            outcome_a_name = opportunity.get('outcome_a', {}).get('name', '')
             token_ids_a = market_a_meta.get('token_ids', {})
             token_id_a = token_ids_a.get(outcome_a_name)
             
+            # Fuzzy match fallback for Polymarket
+            if not token_id_a and token_ids_a:
+                for tid_name, tid_val in token_ids_a.items():
+                    if tid_name.lower() in outcome_a_name.lower() or outcome_a_name.lower() in tid_name.lower():
+                        token_id_a = tid_val
+                        break
+
             # Platform B (Cloudbet)
             market_b_meta = opportunity.get('market_b', {}).get('metadata', {})
-            outcome_b_name = opportunity.get('outcome_b', {}).get('name')
+            outcome_b_name = opportunity.get('outcome_b', {}).get('name', '')
             # Try to get from metadata dict first
-            selection_id_b = market_b_meta.get('selection_ids', {}).get(outcome_b_name)
+            selection_ids_b_all = market_b_meta.get('selection_ids', {})
+            selection_id_b = selection_ids_b_all.get(outcome_b_name)
             
-            # Fallback: search in outcomes_full if available
+            # Fuzzy match fallback for Cloudbet
+            if not selection_id_b:
+                for sid_name, sid_val in selection_ids_b_all.items():
+                    if sid_name.lower() in outcome_b_name.lower() or outcome_b_name.lower() in sid_name.lower():
+                        selection_id_b = sid_val
+                        break
+
+            # Fallback 2: search in outcomes_full if still not found
             if not selection_id_b:
                 market_b_outcomes = opportunity.get('market_b', {}).get('outcomes_full', [])
                 for o in market_b_outcomes:
-                    if o.get('name') == outcome_b_name:
+                    o_name = o.get('name', '').lower()
+                    if outcome_b_name.lower() in o_name or o_name in outcome_b_name.lower():
                         selection_id_b = o.get('selection_id')
                         break
 
