@@ -1,9 +1,17 @@
 import asyncio
 import os
+import sys
 import logging
 from pathlib import Path
 import uvicorn
 from contextlib import asynccontextmanager
+
+# Fix Windows console encoding
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except:
+        pass
 
 # Ensure logs directory exists
 Path("logs").mkdir(exist_ok=True)

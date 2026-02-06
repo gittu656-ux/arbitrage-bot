@@ -289,9 +289,9 @@ class CloudbetFetcher:
                     # Basketball corrections
                     if sport_key == 'basketball-usa-nba' or 'basketball' in sport_key:
                         if '1x2' in market_type_key or 'winner' in market_type_key:
-                            corrected_market_key = 'basketball.match_winner'
-                        elif 'moneyline' in market_type_key:
                             corrected_market_key = 'basketball.moneyline'
+                        elif 'moneyline' in market_type_key:
+                            corrected_market_key = 'basketball.moneyline' # Ensure it stays moneyline
                     
                     # Soccer/Football - 1x2 is valid
                     elif 'soccer' in sport_key or 'football' in sport_key:

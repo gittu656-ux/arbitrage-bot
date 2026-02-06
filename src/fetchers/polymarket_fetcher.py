@@ -113,6 +113,35 @@ class PolymarketFetcher:
                     clob_token_ids = json.loads(clob_token_ids)
                 except:
                     clob_token_ids = []
+            
+            # Fallback: check 'tokens' field (sometimes used in event structure)
+            if not clob_token_ids:
+                tokens = market_data.get('tokens', [])
+                if tokens and isinstance(tokens, list):
+                    # If tokens is list of dicts, extract token_id/tokenId
+                    if len(tokens) > 0 and isinstance(tokens[0], dict):
+                        clob_token_ids = [t.get('tokenId', t.get('token_id', '')) for t in tokens]
+                    # If list of strings
+                    elif len(tokens) > 0 and isinstance(tokens[0], str):
+                         clob_token_ids = tokens
+            
+            # Final Fallback: Query CLOB API directly (Synchronous/Blocking - for reliability)
+            if not clob_token_ids:
+                condition_id = market_data.get('conditionId')
+                if condition_id:
+                     try:
+                         # self.logger.info(f"Fetching CLOB tokens for {condition_id}...")
+                         import httpx
+                         resp = httpx.get(f"https://clob.polymarket.com/markets/{condition_id}", timeout=5)
+                         if resp.status_code == 200:
+                             c_data = resp.json()
+                             c_tokens = c_data.get('tokens', [])
+                             if c_tokens:
+                                 clob_token_ids = [t.get('token_id', '') for t in c_tokens]
+                                 # self.logger.info(f"Resolved tokens via CLOB API: {clob_token_ids}")
+                     except Exception as e:
+                         # self.logger.error(f"CLOB Fallback Failed: {e}")
+                         pass
 
             # Method 1: outcomes list + outcomePrices list (NEW - PRIMARY METHOD)
             outcomes_list = market_data.get('outcomes', [])

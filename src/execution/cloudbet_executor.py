@@ -9,28 +9,29 @@ except ImportError:
 class CloudbetExecutor:
     """Handles bet placement on Cloudbet Trading API."""
     
-    def __init__(self, api_key: str, base_url: str = "https://sports-api.cloudbet.com"):
+    def __init__(self, api_key: str, base_url: str = "https://sports-api.cloudbet.com", proxy: str = None):
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
         self.logger = setup_logger("cloudbet_executor")
-        self.client = httpx.AsyncClient(
-            headers={
+        
+        # Proxy configuration (optional - for bypassing Cloudflare on cloud hosts)
+        client_kwargs = {
+            "headers": {
                 "X-API-Key": self.api_key,
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                # Browser-like headers to bypass Cloudflare WAF
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                # Removed Accept-Encoding to avoid Brotli compression issues
-                "Origin": "https://www.cloudbet.com",
-                "Referer": "https://www.cloudbet.com/",
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-site"
+                # Minimal headers - let proxy handle the rest
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             },
-            timeout=10,
-            follow_redirects=True
-        )
+            "timeout": 30,  # Increased timeout for proxy
+            "follow_redirects": True
+        }
+        
+        if proxy:
+            client_kwargs["proxy"] = proxy  # httpx uses 'proxy' not 'proxies'
+            self.logger.info(f"Using proxy for Cloudbet requests: {proxy}")
+        
+        self.client = httpx.AsyncClient(**client_kwargs)
 
     async def place_bet(
         self, 
@@ -73,8 +74,13 @@ class CloudbetExecutor:
             if response.status_code in (200, 201):
                 try:
                     data = response.json()
-                    self.logger.info(f"Cloudbet bet placed successfully: {data.get('status')}")
-                    return data
+                    status = data.get('status')
+                    if status in ('ACCEPTED', 'PENDING_ACCEPTANCE'):
+                        self.logger.info(f"Cloudbet bet placed successfully: {status}")
+                        return data
+                    else:
+                        self.logger.error(f"Cloudbet bet rejected/failed with status: {status}")
+                        return None
                 except Exception as json_err:
                     self.logger.error(f"Failed to parse success response: {json_err}")
                     return None

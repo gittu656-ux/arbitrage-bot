@@ -171,11 +171,12 @@ class AutobetEngine:
                 import os
                 pm_key = os.getenv("POLYMARKET_PRIVATE_KEY")
                 cb_key = os.getenv("CLOUDBET_API_KEY")
+                proxy = os.getenv("CLOUDBET_PROXY")  # Optional proxy for Railway/cloud hosts
                 
                 if pm_key and not self.pm_executor:
                     self.pm_executor = PolymarketExecutor(pm_key)
                 if cb_key and not self.cb_executor:
-                    self.cb_executor = CloudbetExecutor(cb_key)
+                    self.cb_executor = CloudbetExecutor(cb_key, proxy=proxy)
 
             if not self.pm_executor or not self.cb_executor:
                 self.logger.error("Executors not initialized - missing API keys.")
@@ -188,7 +189,20 @@ class AutobetEngine:
             # Platform A
             market_a_meta = opportunity.get('market_a', {}).get('metadata', {})
             outcome_a_name = opportunity.get('outcome_a', {}).get('name')
-            token_id_a = market_a_meta.get('token_ids', {}).get(outcome_a_name)
+            token_ids_map = market_a_meta.get('token_ids', {})
+            token_id_a = token_ids_map.get(outcome_a_name)
+            
+            # Fallback search if token ID missing
+            if not token_id_a and outcome_a_name and token_ids_map:
+                # Try simple normalization
+                for name, tid in token_ids_map.items():
+                    if name.lower() == outcome_a_name.lower() or outcome_a_name.lower() in name.lower():
+                        token_id_a = tid
+                        self.logger.info(f"Metched token ID via fallback: {name} -> {outcome_a_name}")
+                        break
+            
+            if not token_id_a:
+               self.logger.error(f"Missing Token ID for {outcome_a_name}. Available: {list(token_ids_map.keys())}")
             odds_a = opportunity.get('odds_a')
             stake_a = opportunity.get('bet_amount_a')
 
@@ -223,7 +237,8 @@ class AutobetEngine:
                     event_id=event_id_b, 
                     market_url=market_url_b, 
                     odds=odds_b, 
-                    stake=stake_b
+                    stake=stake_b,
+                    currency=self.cfg.currency
                 )
                 if resp_b:
                     success_b = True
