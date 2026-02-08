@@ -482,34 +482,39 @@ class SportEventMatcher:
                 # 
                 # Cloudbet uses format: "sport.market_type" (e.g., "basketball.moneyline")
                 # Accept:
-                #   - basketball.moneyline, soccer.match_odds, american_football.moneyline
+                #   - basketball.moneyline, american_football.moneyline
                 #   - tennis.winner, mma.winner, boxing.winner
                 #   - Generic: moneyline, ml, match-winner, match_winner
+                #   - For NON-SOCCER: match_odds (2-way markets)
                 # Reject: game lines, spread, total, handicap, etc.
                 
                 # Normalize market type for comparison
                 market_type_lower = market_type.lower()
                 
+                # Detect if this is a soccer market (3-way risk)
+                sport_key = outcome.get('sport_key', '').lower()
+                is_soccer = sport_key == 'soccer'
+                
                 # Check if it's a moneyline/winner market
                 is_primary_moneyline = (
-                    # Direct moneyline markets
+                    # Direct moneyline markets (all sports)
                     'moneyline' in market_type_lower or
                     market_type_lower == 'ml' or
                     'match-winner' in market_type_lower or
                     'match_winner' in market_type_lower or
-                    # Soccer: PREFER Draw No Bet (dnb) to avoid 3-way risk
-                    'draw_no_bet' in market_type_lower or
-                    'dnb' in market_type_lower or
+                    # Match odds for NON-SOCCER sports (basketball, hockey, etc.)
+                    ('match_odds' in market_type_lower and not is_soccer) or
+                    # Soccer: ONLY Draw No Bet to avoid 3-way risk
+                    (is_soccer and ('draw_no_bet' in market_type_lower or 'dnb' in market_type_lower)) or
                     # Tennis/MMA/Boxing use "winner"
                     (market_type_lower.endswith('.winner') or market_type_lower == 'winner')
-                    # REMOVED 1x2/match_odds to prevent betting on markets with Draw without covering it
                 )
                 
                 # Explicitly reject non-moneyline markets even if they contain "winner"
                 is_rejected = (
                     'game_lines' in market_type_lower or
                     'handicap' in market_type_lower or
-                    'ram' in market_type_lower or # random outcome markets
+                    'asian' in market_type_lower or  # Asian handicap
                     'spread' in market_type_lower or
                     'total' in market_type_lower or
                     'over' in market_type_lower or
@@ -517,7 +522,9 @@ class SportEventMatcher:
                     'period' in market_type_lower or  # Exclude period-specific markets
                     'half' in market_type_lower or    # Exclude half-specific markets
                     'quarter' in market_type_lower or # Exclude quarter-specific markets
-                    'outright' in market_type_lower   # Exclude futures/outrights
+                    'outright' in market_type_lower or   # Exclude futures/outrights
+                    # Reject soccer 3-way markets (1x2, match_odds for soccer)
+                    (is_soccer and ('1x2' in market_type_lower or 'match_odds' in market_type_lower))
                 )
                 
                 is_primary_moneyline = is_primary_moneyline and not is_rejected
