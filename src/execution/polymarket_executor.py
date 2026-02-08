@@ -31,9 +31,10 @@ class PolymarketExecutor:
         if not self.creds:
             try:
                 # This requires signing a message with the private key
-                self.creds = self.client.create_api_creds()
+                # Using derive_api_key as create_api_creds is not available in recent versions
+                self.creds = self.client.derive_api_key()
                 self.client.set_api_creds(self.creds)
-                self.logger.info("Polymarket API credentials generated successfully.")
+                self.logger.info("Polymarket API credentials derived successfully.")
             except Exception as e:
                 self.logger.error(f"Failed to generate Polymarket API credentials: {e}")
                 raise
