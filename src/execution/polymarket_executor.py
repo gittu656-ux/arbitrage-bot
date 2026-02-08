@@ -72,7 +72,7 @@ class PolymarketExecutor:
                 self.logger.info(f"Polymarket order placed successfully: {resp.get('order_id')}")
                 return resp
             else:
-                self.logger.error(f"Polymarket order failed: {resp.get('errorMsg')}")
+                self.logger.error(f"Polymarket order failed. Full response: {resp}")
                 return None
                 
         except Exception as e:

@@ -27,7 +27,7 @@ class SportsMarketDetector:
         'bayern munich', 'psg', 'juventus', 'milan', 'inter',
 
         # Sports terms
-        'nba', 'nfl', 'mlb', 'nhl', 'mls', 'premier league', 'la liga', 'serie a',
+        'nba', 'nfl', 'mlb', 'nhl', 'mls', 'premier league', 'la liga', 'serie a', 'soccer', 'futbol',
         'bundesliga', 'champions league', 'world cup', 'super bowl', 'finals',
         'playoff', 'championship', 'match', 'game', 'score', 'win', 'lose',
         'season', 'mvp', 'golden boot', 'touchdown', 'goal', 'home run',
@@ -59,7 +59,16 @@ class SportsMarketDetector:
             'basketball': ['nba', 'lakers', 'warriors', 'celtics', 'heat', 'bucks', 'nets', 'knicks', 'sixers', 'raptors', 'bulls', 'cavaliers', 'pistons', 'pacers', 'hawks', 'hornets', 'magic', 'wizards', 'nuggets', 'timberwolves', 'thunder', 'trail blazers', 'jazz', 'suns', 'kings', 'clippers', 'mavericks', 'rockets', 'grizzlies', 'pelicans', 'spurs'],
             'ice-hockey': ['nhl', 'stanley cup', 'bruins', 'maple leafs', 'canadiens', 'senators', 'lightning', 'panthers', 'red wings', 'sabres', 'rangers', 'islanders', 'devils', 'flyers', 'penguins', 'capitals', 'blue jackets', 'hurricanes', 'predators', 'blackhawks', 'blues', 'stars', 'wild', 'avalanche', 'flames', 'oilers', 'canucks', 'kraken', 'ducks', 'sharks', 'kings', 'golden knights', 'coyotes'],
             'baseball': ['mlb', 'world series', 'yankees', 'red sox', 'blue jays', 'orioles', 'rays', 'white sox', 'guardians', 'tigers', 'royals', 'twins', 'astros', 'angels', 'athletics', 'mariners', 'rangers', 'braves', 'marlins', 'mets', 'phillies', 'nationals', 'cubs', 'reds', 'brewers', 'pirates', 'cardinals', 'diamondbacks', 'rockies', 'dodgers', 'padres', 'giants'],
-            'soccer': ['premier league', 'manchester united', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'manchester city', 'everton', 'leicester', 'barcelona', 'real madrid', 'atletico', 'juventus', 'inter', 'milan', 'bayern', 'dortmund', 'psg'],
+            'baseball': ['mlb', 'world series', 'yankees', 'red sox', 'blue jays', 'orioles', 'rays', 'white sox', 'guardians', 'tigers', 'royals', 'twins', 'astros', 'angels', 'athletics', 'mariners', 'rangers', 'braves', 'marlins', 'mets', 'phillies', 'nationals', 'cubs', 'reds', 'brewers', 'pirates', 'cardinals', 'diamondbacks', 'rockies', 'dodgers', 'padres', 'giants'],
+            'soccer': [
+                'premier league', 'epl', 'fa cup', 'champions league', 'europa', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'mls', 'world cup', 'euro 20', 'copa america',
+                'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'leicester', 'everton', 'west ham', 'newcastle', 'aston villa', 'brighton', 'wolves',
+                'barcelona', 'real madrid', 'atletico', 'sevilla', 'valencia', 'villarreal',
+                'bayern', 'dortmund', 'leipzig', 'leverkusen', 'frankfurt',
+                'juventus', 'inter', 'milan', 'napoli', 'roma', 'lazio', 'atalanta',
+                'psg', 'monaco', 'lyon', 'marseille', 'lille',
+                'ajax', 'benfica', 'porto', 'sporting', 'celtic', 'rangers'
+            ],
         }
 
     def detect_sport(self, title: str) -> str:
@@ -488,18 +497,19 @@ class SportEventMatcher:
                     market_type_lower == 'ml' or
                     'match-winner' in market_type_lower or
                     'match_winner' in market_type_lower or
-                    # Soccer uses "match_odds" for moneyline
-                    'match_odds' in market_type_lower or
+                    # Soccer: PREFER Draw No Bet (dnb) to avoid 3-way risk
+                    'draw_no_bet' in market_type_lower or
+                    'dnb' in market_type_lower or
                     # Tennis/MMA/Boxing use "winner"
-                    (market_type_lower.endswith('.winner') or market_type_lower == 'winner') or
-                    # 1x2 markets (Home/Draw/Away) - valid for soccer
-                    (market_type_lower.endswith('.1x2') and 'period' not in market_type_lower and 'half' not in market_type_lower)
+                    (market_type_lower.endswith('.winner') or market_type_lower == 'winner')
+                    # REMOVED 1x2/match_odds to prevent betting on markets with Draw without covering it
                 )
                 
                 # Explicitly reject non-moneyline markets even if they contain "winner"
                 is_rejected = (
                     'game_lines' in market_type_lower or
                     'handicap' in market_type_lower or
+                    'ram' in market_type_lower or # random outcome markets
                     'spread' in market_type_lower or
                     'total' in market_type_lower or
                     'over' in market_type_lower or

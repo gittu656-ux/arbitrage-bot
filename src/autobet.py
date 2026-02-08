@@ -41,6 +41,7 @@ class AutobetEngine:
         self._today = date.today()
         self._bets_today = 0
         self._loss_today = 0.0
+        self._recent_attempts = {}  # Track recent attempts to prevent loops
         
         # Initialize executors if real execution is enabled
         self.pm_executor = None
@@ -56,12 +57,31 @@ class AutobetEngine:
             self._bets_today = 0
             self._loss_today = 0.0
 
+    def _clean_recent_attempts(self):
+        """Remove old attempts from the cache (older than 1 hour)."""
+        now = datetime.now().timestamp()
+        # Keep attempts from last 3600 seconds
+        self._recent_attempts = {
+            k: v for k, v in self._recent_attempts.items() 
+            if now - v < 3600
+        }
+
     def should_autobet(self, opportunity: Dict) -> bool:
         """Apply cheap risk filters before attempting to autobet."""
         if not self.cfg.enabled:
             return False
 
         self._reset_daily_counters_if_needed()
+        self._clean_recent_attempts()
+
+        # check for recent attempts to prevent double-betting loops
+        market_name = opportunity.get("market_name")
+        if market_name in self._recent_attempts:
+            last_time = self._recent_attempts[market_name]
+            self.logger.warning(
+                f"Autobet skipped - recently attempted {market_name} at {datetime.fromtimestamp(last_time)}"
+            )
+            return False
 
         profit_pct = opportunity.get("profit_percentage", 0.0)
         if profit_pct < self.cfg.min_profit_threshold:
@@ -95,6 +115,9 @@ class AutobetEngine:
         """
         if not self.should_autobet(opportunity):
             return
+
+        # Record attempt immediately to prevent race conditions or loops
+        self._recent_attempts[opportunity.get("market_name")] = datetime.now().timestamp()
 
         total_capital = float(opportunity.get("total_capital", 0.0) or 0.0)
 
@@ -156,9 +179,11 @@ class AutobetEngine:
                 f"Both bets placed | PnL=${guaranteed_profit:.2f}"
             )
         else:
-            self.logger.error(
+            self.logger.critical(
                 f"AUTOBET FAILED: {opportunity.get('market_name')} | "
-                f"One or both bets failed - NOT marked as taken"
+                f"One or both bets failed. "
+                f"Check logs for critical errors. "
+                f"Marked in memory as attempted to prevent immediate retry."
             )
 
     async def _execute_real_bets(self, opportunity: Dict) -> bool:
