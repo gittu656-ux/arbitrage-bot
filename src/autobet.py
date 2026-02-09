@@ -69,6 +69,7 @@ class AutobetEngine:
     def should_autobet(self, opportunity: Dict) -> bool:
         """Apply cheap risk filters before attempting to autobet."""
         if not self.cfg.enabled:
+            self.logger.info("Autobet skipped - configuration disabled (cfg.enabled=False)")
             return False
 
         self._reset_daily_counters_if_needed()

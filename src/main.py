@@ -356,7 +356,7 @@ class ArbitrageBot:
                 )
                 
                 if is_duplicate:
-                    self.logger.debug(f"Skipping duplicate opportunity: {opportunity['market_name']}")
+                    self.logger.info(f"Skipping duplicate opportunity (already processed): {opportunity['market_name']}")
                     continue
                 
                 self.logger.info(f"Processing new opportunity #{processed_count}: {opportunity['market_name']} ({opportunity.get('profit_percentage', 0):.2f}% profit)")
@@ -390,8 +390,11 @@ class ArbitrageBot:
                     continue
 
                 # Autobet (simulation / bookkeeping only) if enabled
+                self.logger.info(f"Checking autobet for {opportunity['market_name']} (Profit: {profit_pct:.2f}%)")
                 try:
+                    self.logger.info("Calling autobet_engine.autobet_opportunity...")
                     self.autobet_engine.autobet_opportunity(opportunity, db_id)
+                    self.logger.info("Returned from autobet_engine.autobet_opportunity")
                 except Exception as e:
                     self.logger.error(f"Error in autobet engine: {e}", exc_info=True)
 
