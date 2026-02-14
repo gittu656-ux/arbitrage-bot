@@ -66,16 +66,29 @@ class PolymarketExecutor:
             
             self.logger.info(f"Placing {side} order on Polymarket: {token_id} @ {price} for {amount} USDC")
             
-            # Note: create_order signs and posts the order
-            resp = self.client.create_order(order_args)
+            # Step 1: Create and Sign Order locally
+            signed_order = self.client.create_order(order_args)
+            
+            # Step 2: Post Order to API
+            resp = self.client.post_order(signed_order)
             
             if resp.get('success'):
                 self.logger.info(f"Polymarket order placed successfully: {resp.get('order_id')}")
                 return resp
             else:
-                self.logger.error(f"Polymarket order failed. Full response: {resp}")
+                error_msg = str(resp)
+                if "insufficient" in error_msg.lower() or "funds" in error_msg.lower() or "balance" in error_msg.lower():
+                    self.logger.critical(f"❌ INSUFFICIENT FUNDS on Polymarket! Error: {error_msg}")
+                    print("\n⚠️  [POLYMARKET] INSUFFICIENT FUNDS - Please top up your USDC balance.\n")
+                else:
+                    self.logger.error(f"Polymarket order failed. Full response: {resp}")
                 return None
                 
         except Exception as e:
-            self.logger.error(f"Error placing Polymarket order: {e}")
+            error_msg = str(e)
+            if "insufficient" in error_msg.lower() or "funds" in error_msg.lower() or "balance" in error_msg.lower():
+                self.logger.critical(f"❌ INSUFFICIENT FUNDS on Polymarket! Error: {error_msg}")
+                print("\n⚠️  [POLYMARKET] INSUFFICIENT FUNDS - Please check your wallet balance.\n")
+            else:
+                self.logger.error(f"Error placing Polymarket order: {e}")
             return None

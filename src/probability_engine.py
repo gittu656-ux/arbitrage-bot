@@ -302,6 +302,13 @@ class ProbabilityEngine:
             cb_prob_team1 = cb_data_team1.get('prob', 0)
             cb_prob_team2 = cb_data_team2.get('prob', 0)
             
+            # LOG CURRENT PROBABILITIES FOR MATCHED EVENTS
+            self.logger.info(
+                f"DEBUG PROBS for {pm_title}: "
+                f"PM({team1}={pm_prob_team1:.2%}, {team2}={pm_prob_team2:.2%}) "
+                f"CB({team1}={cb_prob_team1:.2%}, {team2}={cb_prob_team2:.2%})"
+            )
+            
             if not pm_prob_team1 or not pm_prob_team2 or not cb_prob_team1 or not cb_prob_team2:
                 self.logger.debug(
                     f"Skipping {pm_title}: Missing probabilities. "
@@ -314,6 +321,13 @@ class ProbabilityEngine:
             # Team1: PM prob + CB prob (opposite outcome)
             total_prob_team1 = pm_prob_team1 + cb_prob_team2
             total_prob_team2 = pm_prob_team2 + cb_prob_team1
+            
+            # LOG ARBITRAGE CALCULATION
+            self.logger.info(
+                f"DEBUG ARB for {pm_title}: "
+                f"PM {team1} + CB {team2} = {total_prob_team1:.4f}, "
+                f"PM {team2} + CB {team1} = {total_prob_team2:.4f}"
+            )
             
             # Use the better arbitrage opportunity
             arbitrage_found = False

@@ -96,7 +96,13 @@ class CloudbetExecutor:
                     except:
                         error_msg = f"Status {response.status_code} (unable to decode response)"
                 
-                self.logger.error(f"Cloudbet bet failed: {response.status_code} - {error_msg}")
+                # Highlight insufficient funds
+                if "insufficient" in error_msg.lower() or "funds" in error_msg.lower():
+                    self.logger.critical(f"❌ INSUFFICIENT FUNDS on Cloudbet! Error: {error_msg}")
+                    print("\n⚠️  [CLOUDBET] INSUFFICIENT FUNDS - Please top up your account.\n")
+                else:
+                    self.logger.error(f"Cloudbet bet failed: {response.status_code} - {error_msg}")
+                
                 return None
                 
         except Exception as e:
