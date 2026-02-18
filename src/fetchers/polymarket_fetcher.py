@@ -319,26 +319,26 @@ class PolymarketFetcher:
         if sports and isinstance(sports, list):
             self.logger.info(f"Found {len(sports)} sports")
             
-            # Find NBA and NFL series_id
-            nba_series_id = None
-            nfl_series_id = None
+            # Target sports and leagues
+            TARGET_SPORTS = [
+                'nba', 'nfl', 'nhl', 'mlb', 'epl', 'lal', 'bun', 'fl1', 'sea', 'ucl', 'uel', 'mls'
+            ]
+            target_series_ids = []
             
             for sport in sports:
                 sport_name = sport.get('sport', '').lower()
                 series = sport.get('series')
                 
-                if sport_name == 'nba' and series:
-                    nba_series_id = series
-                elif sport_name == 'nfl' and series:
-                    nfl_series_id = series
+                if (sport_name in TARGET_SPORTS or any(s in sport_name for s in TARGET_SPORTS)) and series:
+                    target_series_ids.append((sport_name, series))
             
-            self.logger.info(f"NBA series_id: {nba_series_id}, NFL series_id: {nfl_series_id}")
+            self.logger.info(f"Monitoring series: {[s[0] for s in target_series_ids]}")
             
             # Step 2: Get game events (not futures) using tag_id=100639
             # This filters to just game bets, not futures/props
             GAME_TAG_ID = 100639  # Tag ID for game bets (not futures)
             
-            for series_id in [nba_series_id, nfl_series_id]:
+            for sport_name, series_id in target_series_ids:
                 if not series_id:
                     continue
                 

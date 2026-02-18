@@ -146,42 +146,7 @@ class SportsArbitrageEngine:
                     'start_time': opp.get('start_time'),
                     'type': 'arbitrage'
                 }
-            else:
-                # Format for value edge opportunities
-                # For value edge, we're betting the SAME TEAM on both platforms
-                # but one platform has better odds
-                
-                # Determine which team from cb_teams matches for value edge
-                team_for_value = opp['team']  # This is the team with the value edge
-                cb_teams = opp.get('cb_teams') or None
-                
-                formatted = {
-                    'market_name': opp['market_name'],
-                    'outcome_name': f"{team_for_value} (Value Edge)",
-                    'platform_a': opp['platform_a'],
-                    'platform_b': opp['platform_b'],
-                    'market_a': opp['market_a'],
-                    'market_b': opp['market_b'],
-                    'cb_teams': cb_teams,
-                    'outcome_a': {
-                        'name': team_for_value,  # Same team on both platforms
-                        'odds': opp['pm_odds']
-                    },
-                    'outcome_b': {
-                        'name': team_for_value,  # Same team (correct for value edge)
-                        'odds': opp['cb_odds']
-                    },
-                    'odds_a': opp['pm_odds'],
-                    'odds_b': opp['cb_odds'],
-                    'profit_percentage': abs(opp['edge_percentage']),  # Use edge as "profit"
-                    'edge_percentage': opp['edge_percentage'],
-                    'better_platform': opp['better_platform'],
-                    'sport_key': opp.get('sport_key', 'unknown'),
-                    'competition_key': opp['market_b'].get('competition_key', 'unknown'),
-                    'start_time': opp.get('start_time'),
-                    'type': 'value_edge'
-                }
-            
-            formatted_opportunities.append(formatted)
+                formatted_opportunities.append(formatted)
+            # Value edge opportunities are skipped as requested by the user
         
         return formatted_opportunities

@@ -3,8 +3,8 @@
 
 # Bankroll and Betting Configuration
 bankroll:
-  amount: 30.0  # Actual account balance
-  kelly_fraction: 0.5
+  amount: 2.0  # Set to 2.0 to achieve ~$1 per side in arbitrage
+  kelly_fraction: 1.0 # Use 100% of the $2.0 target amount
 
 # Arbitrage Detection Settings
 arbitrage:
@@ -61,7 +61,7 @@ autobet:
   enabled: true
   min_profit_threshold: 0.5  # Execute 0.5%+
   max_bets_per_day: 50
-  max_stake_fraction: 0.5     # Risk 50% ($15) of bankroll per arb
+  max_stake_fraction: 1.0     # Risk 100% ($2) of bankroll target per arb
   daily_loss_limit: 100.0
   real_execution: true        # DANGER: Set to true to place real bets
   currency: "USDC"            # Default currency for betting (e.g., USDT, USDC)

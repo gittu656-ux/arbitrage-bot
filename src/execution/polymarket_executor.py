@@ -78,8 +78,8 @@ class PolymarketExecutor:
             else:
                 error_msg = str(resp)
                 if "insufficient" in error_msg.lower() or "funds" in error_msg.lower() or "balance" in error_msg.lower():
-                    self.logger.critical(f"❌ INSUFFICIENT FUNDS on Polymarket! Error: {error_msg}")
-                    print("\n⚠️  [POLYMARKET] INSUFFICIENT FUNDS - Please top up your USDC balance.\n")
+                    self.logger.critical(f"INSUFFICIENT FUNDS on Polymarket! Error: {error_msg}")
+                    print("\n[!] [POLYMARKET] INSUFFICIENT FUNDS - Please top up your USDC balance.\n")
                 else:
                     self.logger.error(f"Polymarket order failed. Full response: {resp}")
                 return None
@@ -87,8 +87,8 @@ class PolymarketExecutor:
         except Exception as e:
             error_msg = str(e)
             if "insufficient" in error_msg.lower() or "funds" in error_msg.lower() or "balance" in error_msg.lower():
-                self.logger.critical(f"❌ INSUFFICIENT FUNDS on Polymarket! Error: {error_msg}")
-                print("\n⚠️  [POLYMARKET] INSUFFICIENT FUNDS - Please check your wallet balance.\n")
+                self.logger.critical(f"INSUFFICIENT FUNDS on Polymarket! Error: {error_msg}")
+                print("\n[!] [POLYMARKET] INSUFFICIENT FUNDS - Please check your wallet balance.\n")
             else:
                 self.logger.error(f"Error placing Polymarket order: {e}")
             return None
