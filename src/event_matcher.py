@@ -26,7 +26,7 @@ class EventMatcher:
     
     def __init__(
         self,
-        team_similarity_threshold: float = 70.0,  # Lowered from 80 to 70 for more matches
+        team_similarity_threshold: float = 65.0,  # Lowered from 70 to 65 for more matches
         time_window_hours: int = 168  # Increased to 7 days (168 hours) for futures markets
     ):
         """
@@ -52,7 +52,7 @@ class EventMatcher:
         # Remove common prefixes from Cloudbet
         name = name.replace('s-', '').replace('h-', '').replace('a-', '')
         
-        # Remove city names for US teams (more comprehensive)
+        # Remove city names and common soccer descriptors
         city_patterns = [
             'los angeles', 'la ', 'new york', 'ny ', 'san francisco', 'sf ',
             'golden state', 'gs ', 'manchester', 'liverpool', 'real', 'fc ', 
@@ -65,11 +65,15 @@ class EventMatcher:
         for city in city_patterns:
             name = name.replace(city, '').strip()
         
-        # Remove common suffixes
-        suffixes = [' fc', ' cf', ' united', ' city', ' town']
+        # Remove common soccer suffixes/terms
+        suffixes = [
+            ' fc', ' cf', ' united', ' city', ' town', ' albion', ' athletic', 
+            ' county', ' & hove albion', ' rangers', ' hotspur', ' arsenal',
+            ' de futbol', ' balompie', ' borussia', ' mnonchengladbach', ' munich'
+        ]
         for suffix in suffixes:
-            if name.endswith(suffix):
-                name = name[:-len(suffix)].strip()
+            if suffix in name:
+                name = name.replace(suffix, '').strip()
         
         # Remove separators
         name = name.replace('-', ' ').replace('_', ' ').replace(',', '').replace('.', '')

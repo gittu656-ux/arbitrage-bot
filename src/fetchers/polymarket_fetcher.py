@@ -300,7 +300,7 @@ class PolymarketFetcher:
             self.logger.error(f"Error parsing market '{market_data.get('question', 'NO TITLE')}': {e}", exc_info=True)
             return None
     
-    async def fetch_all_markets(self, limit: int = 200) -> List[Dict]:
+    async def fetch_all_markets(self, limit: int = 500) -> List[Dict]:
         """
         Fetch markets with relaxed filtering.
         Logs filtering statistics.

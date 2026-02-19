@@ -11,7 +11,7 @@ from typing import Optional
 def setup_logger(
     name: str = "arbitrage_bot",
     log_level: str = "INFO",
-    log_file: Optional[str] = None,
+    log_file: Optional[str] = "logs/arbitrage_bot.log",
     max_bytes: int = 10485760,
     backup_count: int = 5
 ) -> logging.Logger:

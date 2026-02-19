@@ -47,7 +47,7 @@ class SportsMarketDetector:
 
         # Other sports
         'formula 1', 'f1', 'racing', 'olympics', 'gold medal',
-        'golf', 'masters', 'pga', 'tiger woods',
+        'golf', 'masters', 'pga', 'tiger woods', 'lal', 'bun', 'fl1', 'sea', 'ucl', 'uel',
     }
 
     def __init__(self):
@@ -61,12 +61,12 @@ class SportsMarketDetector:
             'baseball': ['mlb', 'world series', 'yankees', 'red sox', 'blue jays', 'orioles', 'rays', 'white sox', 'guardians', 'tigers', 'royals', 'twins', 'astros', 'angels', 'athletics', 'mariners', 'rangers', 'braves', 'marlins', 'mets', 'phillies', 'nationals', 'cubs', 'reds', 'brewers', 'pirates', 'cardinals', 'diamondbacks', 'rockies', 'dodgers', 'padres', 'giants'],
             'baseball': ['mlb', 'world series', 'yankees', 'red sox', 'blue jays', 'orioles', 'rays', 'white sox', 'guardians', 'tigers', 'royals', 'twins', 'astros', 'angels', 'athletics', 'mariners', 'rangers', 'braves', 'marlins', 'mets', 'phillies', 'nationals', 'cubs', 'reds', 'brewers', 'pirates', 'cardinals', 'diamondbacks', 'rockies', 'dodgers', 'padres', 'giants'],
             'soccer': [
-                'premier league', 'epl', 'fa cup', 'champions league', 'europa', 'la liga', 'bundesliga', 'serie a', 'ligue 1', 'mls', 'world cup', 'euro 20', 'copa america',
+                'premier league', 'epl', 'fa cup', 'champions league', 'ucl', 'europa', 'uel', 'la liga', 'lal', 'bundesliga', 'bun', 'serie a', 'sea', 'ligue 1', 'fl1', 'mls', 'world cup', 'euro 20', 'copa america',
                 'manchester', 'liverpool', 'chelsea', 'arsenal', 'tottenham', 'leicester', 'everton', 'west ham', 'newcastle', 'aston villa', 'brighton', 'wolves',
-                'barcelona', 'real madrid', 'atletico', 'sevilla', 'valencia', 'villarreal',
+                'barcelona', 'real madrid', 'atletico', 'sevilla', 'valencia', 'villarreal', 'betis', 'sociedad', 'osasuna', 'getafe',
                 'bayern', 'dortmund', 'leipzig', 'leverkusen', 'frankfurt',
-                'juventus', 'inter', 'milan', 'napoli', 'roma', 'lazio', 'atalanta',
-                'psg', 'monaco', 'lyon', 'marseille', 'lille',
+                'juventus', 'inter', 'milan', 'napoli', 'roma', 'lazio', 'atalanta', 'fiorentina',
+                'psg', 'monaco', 'lyon', 'marseille', 'lille', 'nice', 'lens',
                 'ajax', 'benfica', 'porto', 'sporting', 'celtic', 'rangers'
             ],
         }

@@ -386,9 +386,8 @@ class CloudbetFetcher:
                 
                 self.logger.debug(f"  Found {len(competitions)} competitions for {sport_name}")
                 
-                # Limit number of competitions per sport for testing
-                # TODO: Remove this limit in production
-                competitions_to_fetch = competitions[:5]  # Only first 5 competitions
+                # Fetch more competitions to ensure we get game markets, not just outrights
+                competitions_to_fetch = competitions[:50]  # Increased from 5 to 50
 
                 # Step 3: For each competition, fetch events
                 for comp in competitions_to_fetch:
