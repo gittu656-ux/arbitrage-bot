@@ -133,6 +133,8 @@ class AutobetEngine:
             # Scale bet amounts and profits proportionally
             opportunity["bet_amount_a"] *= scale
             opportunity["bet_amount_b"] *= scale
+            if "bet_amount_c" in opportunity:
+                opportunity["bet_amount_c"] *= scale
             opportunity["total_capital"] = max_stake
             opportunity["guaranteed_profit"] *= scale
             total_capital = max_stake
@@ -227,8 +229,22 @@ class AutobetEngine:
                         self.logger.info(f"Metched token ID via fallback: {name} -> {outcome_a_name}")
                         break
             
+            if not token_id_a and opportunity.get('pm_outcome'):
+                pm_outcome = opportunity.get('pm_outcome')
+                token_id_a = token_ids_map.get(pm_outcome)
+                if not token_id_a:
+                    # Try case-insensitive lookup for YES/NO
+                    for name, tid in token_ids_map.items():
+                        if name.upper() == pm_outcome.upper():
+                            token_id_a = tid
+                            break
+                if token_id_a:
+                    self.logger.info(f"Resolved token ID via pm_outcome: {pm_outcome} -> {token_id_a}")
+
             if not token_id_a:
-               self.logger.error(f"Missing Token ID for {outcome_a_name}. Available: {list(token_ids_map.keys())}")
+               self.logger.error(f"Missing Token ID for {outcome_a_name}. Available: {list(token_ids_map.keys())}. ABORTING.")
+               return False
+            
             odds_a = opportunity.get('odds_a')
             stake_a = opportunity.get('bet_amount_a')
 
@@ -237,6 +253,11 @@ class AutobetEngine:
             outcome_b_name = outcome_b.get('name')
             odds_b = opportunity.get('odds_b')
             stake_b = opportunity.get('bet_amount_b')
+            
+            # Platform C (Optional Draw for 3-way)
+            outcome_c = opportunity.get('outcome_c')
+            odds_c = opportunity.get('odds_c')
+            stake_c = opportunity.get('bet_amount_c')
             
             # Check for V3 metadata (Sports Event Matcher)
             event_id_b = outcome_b.get('event_id')
@@ -254,11 +275,26 @@ class AutobetEngine:
 
             self.logger.info(f"STARTING REAL EXECUTION for arbitrage: {opportunity.get('market_name')}")
 
-            # Execution logic: Sequence matters. 
-            # 1. Place bet on Platform B (Cloudbet)
+            # NEW ORDER: Polymarket (A) -> Cloudbet (B & C)
+            # Prediction markets (Polymarket) are usually less liquid, so we hit them first.
+            
+            # 1. Place bet on Platform A (Polymarket - Main Team)
+            success_a = False
+            price_a = 1.0 / odds_a
+            self.logger.info(f"Executing Polymarket leg first: {outcome_a_name} @ {price_a:.4f} | Stake={stake_a}")
+            resp_a = await self.pm_executor.place_order(token_id_a, price_a, "BUY", stake_a)
+            
+            if resp_a:
+                success_a = True
+                self.logger.info("Successfully placed first leg on Polymarket")
+            else:
+                self.logger.error("Failed to place Polymarket bet. ABORTING entire arbitrage.")
+                return False
+
+            # 2. Place bet on Platform B (Cloudbet - Opposite Team)
             success_b = False
-            if event_id_b and market_url_b:
-                self.logger.info(f"Executing Cloudbet V3 Bet: {market_url_b} on event {event_id_b}")
+            if success_a and event_id_b and market_url_b:
+                self.logger.info(f"Executing Cloudbet V3 Hedge (B): {market_url_b} | Stake={stake_b}")
                 resp_b = await self.cb_executor.place_bet(
                     event_id=event_id_b, 
                     market_url=market_url_b, 
@@ -268,30 +304,37 @@ class AutobetEngine:
                 )
                 if resp_b:
                     success_b = True
-                    self.logger.info("Successfully placed bet on Cloudbet V3")
                 else:
-                    self.logger.error("Failed to place bet on Cloudbet. ABORTING hedge.")
+                    self.logger.critical(f"FAILED TO HEDGE on Cloudbet B! You are unhedged on Polymarket!")
+                    # In a production bot, we might try to market-sell the PM position here
                     return False
             else:
-                self.logger.error("Cloudbet execution failed: Missing event_id or market_url")
+                self.logger.error("Cloudbet execution failed: Missing event_id or market_url for B")
                 return False
 
-            # 2. Place bet on Platform A (Polymarket)
-            success_a = False
-            if success_b and token_id_a:
-                # Convert decimal odds to price (e.g. 2.0 -> 0.5)
-                price_a = 1.0 / odds_a
-                self.logger.info(f"Executing Polymarket hedge: {outcome_a_name} @ {price_a:.4f}")
-                resp_a = await self.pm_executor.place_order(token_id_a, price_a, "BUY", stake_a)
-                if resp_a:
-                    success_a = True
-                    self.logger.info("Successfully placed hedge order on Polymarket")
-                else:
-                    self.logger.critical(f"FAILED TO HEDGE on Polymarket! You have an unhedged bet on Cloudbet for ${stake_b}")
-                    return False
-            
-            # Return True only if both bets succeeded
-            return success_a and success_b
+            # 3. Place bet on Platform C (Cloudbet - Draw) if needed
+            success_c = True
+            if success_a and success_b and outcome_c and stake_c:
+                success_c = False
+                event_id_c = outcome_c.get('event_id')
+                market_url_c = outcome_c.get('market_url')
+                if event_id_c and market_url_c:
+                    self.logger.info(f"Executing Cloudbet V3 Hedge (C - Draw): {market_url_c} | Stake={stake_c}")
+                    resp_c = await self.cb_executor.place_bet(
+                        event_id=event_id_c, 
+                        market_url=market_url_c, 
+                        odds=odds_c, 
+                        stake=stake_c,
+                        currency=self.cfg.currency
+                    )
+                    if resp_c:
+                        success_c = True
+                    else:
+                        self.logger.critical("FAILED TO HEDGE Draw on Cloudbet! You are partially unhedged!")
+                        return False
+
+            # Return True only if ALL required bets succeeded
+            return success_a and success_b and success_c
             
         except Exception as e:
             self.logger.error(f"Error in real execution: {e}", exc_info=True)

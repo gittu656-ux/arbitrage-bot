@@ -146,6 +146,13 @@ class SportsArbitrageEngine:
                     'start_time': opp.get('start_time'),
                     'type': 'arbitrage'
                 }
+                
+                # Add Draw info if we need to hedge it (3-way arbitrage)
+                if 'outcome_c' in opp:
+                    formatted['outcome_c'] = opp['outcome_c']
+                    formatted['odds_c'] = opp.get('odds_c')
+                    # Update outcome name to reflect 3-way
+                    formatted['outcome_name'] = f"{team} (PM) vs {opposite_team} & Draw (CB)"
                 formatted_opportunities.append(formatted)
             # Value edge opportunities are skipped as requested by the user
         

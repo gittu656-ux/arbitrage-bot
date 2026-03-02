@@ -20,7 +20,7 @@ async def trigger_dual_test_bets():
     cb_key = os.getenv("CLOUDBET_API_KEY")
     cb_proxy = os.getenv("CLOUDBET_PROXY")
     
-    print("--- 🚀 Initializing Target Soccer Test Bet ($1 each) ---")
+    print("--- Initializing Target Soccer Test Bet ($1 each) ---")
     
     pm_executor = PolymarketExecutor(pm_key)
     cb_executor = CloudbetExecutor(api_key=cb_key, proxy=cb_proxy)
@@ -30,7 +30,7 @@ async def trigger_dual_test_bets():
     
     try:
         # Step 1: Find a specific match on PM
-        print("🔍 Searching for a major Soccer match on Polymarket...")
+        print("Searching for a major Soccer match on Polymarket...")
         pm_markets = await pm_fetcher.fetch_all_markets(limit=300)
         
         target_pm = None
@@ -59,11 +59,11 @@ async def trigger_dual_test_bets():
                     break
         
         if not target_pm:
-            print("❌ No suitable match with tokens found on Polymarket.")
+            print("No suitable match with tokens found on Polymarket.")
             return
 
         pm_title = target_pm.get('title', 'Unknown')
-        print(f"✅ Selected PM Match: {pm_title}")
+        print(f"Selected PM Match: {pm_title}")
         
         # Step 2: Extract PM Token
         metadata = target_pm.get('metadata', {})
@@ -71,11 +71,11 @@ async def trigger_dual_test_bets():
         pm_token = list(token_ids_dict.values())[0] if token_ids_dict else None
             
         if not pm_token:
-            print(f"❌ PM Token not found for {pm_title}.")
+            print(f"PM Token not found for {pm_title}.")
             return
 
         # Step 3: Find match on Cloudbet
-        print("🔍 Fetching Cloudbet markets to match...")
+        print("Fetching Cloudbet markets to match...")
         cb_outcomes = await cb_fetcher.fetch_all_markets()
         
         target_cb_outcome = None
@@ -92,31 +92,32 @@ async def trigger_dual_test_bets():
                     break
                     
         if not target_cb_outcome:
-            print(f"❌ Could not find a matching event on Cloudbet for {pm_title}")
+            print(f"Could not find a matching event on Cloudbet for {pm_title}")
             # Log some CB soccer events to debug
             print("CB Soccer Samples:")
             soccer_ev = [o['event_name'] for o in cb_outcomes if 'soccer' in str(o.get('sport_key')).lower()][:5]
             print(soccer_ev)
             return
             
-        print(f"✅ Found Cloudbet Match: {target_cb_outcome['event_name']}")
+        print(f"Found Cloudbet Match: {target_cb_outcome['event_name']}")
 
         # Step 4: Execute
-        print(f"\n💰 Placing $1 bet on Polymarket ({pm_title})...")
-        pm_res = await pm_executor.place_order(token_id=pm_token, price=0.95, side="BUY", amount=1.0)
+        print(f"\nPlacing $5.0 bet on Polymarket ({pm_title})...")
+        pm_res = await pm_executor.place_order(token_id=pm_token, price=0.95, side="BUY", amount=5.0)
         
-        print(f"💰 Placing $1 bet on Cloudbet ({target_cb_outcome['event_name']} - {target_cb_outcome['outcome']})...")
+        print(f"Placing $5.0 bet on Cloudbet ({target_cb_outcome['event_name']} - {target_cb_outcome['outcome']})...")
         cb_res = await cb_executor.place_bet(
             event_id=str(target_cb_outcome['event_id']),
             market_url=target_cb_outcome['market_url'],
             odds=target_cb_outcome['odds'],
-            stake=1.0
+            stake=5.0,
+            currency="USDC" 
         )
         
         if pm_res and cb_res:
-            print("\n🎉 SUCCESS! Both bets placed.")
+            print("\nSUCCESS! Both bets placed.")
         else:
-            print("\n⚠️ One or both bets failed. PM success: " + str(bool(pm_res)) + ", CB success: " + str(bool(cb_res)))
+            print("\nOne or both bets failed. PM success: " + str(bool(pm_res)) + ", CB success: " + str(bool(cb_res)))
 
     finally:
         await pm_fetcher.close()

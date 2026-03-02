@@ -126,31 +126,38 @@ class SportsMarketDetector:
         - "Manchester United vs Liverpool - Match Winner"
 
         Returns:
-            Tuple of (team1, team2) or (team, None) for futures, or (None, None) if not found
+        Tuple of (team1, team2) or (team, None) for futures, or (None, None) if not found
         """
+        # 1. Clean title of noise before matching
+        noise_prefixes = ['will the', 'will', 'can the', 'can', 'how many', 'does', 'do', 'will it']
+        clean_title = title
+        for prefix in noise_prefixes:
+            if clean_title.lower().startswith(prefix):
+                clean_title = clean_title[len(prefix):].strip()
+
         # Pattern 1: Team1 vs Team2 or Team1 v Team2 (with abbreviations)
         # Handles: "Nets vs. Wizards: 1H Moneyline", "Lakers vs Warriors", etc.
-        match = re.search(r'([A-Za-z\s]+?)\s+v(?:s|\.)?\.?\s+([A-Za-z\s]+?)(?:\s*[-:\(]|\s*$)', title, re.IGNORECASE)
+        match = re.search(r'([A-Za-z0-9\s]+?)\s+v(?:s|\.)?\.?\s+([A-Za-z0-9\s]+?)(?:\s*[-:\(]|\s*$)', clean_title, re.IGNORECASE)
         if match:
             team1 = match.group(1).strip()
             team2 = match.group(2).strip()
             # Clean up trailing words and suffixes like ": 1H Moneyline"
-            team1 = re.sub(r'\s+(on|at|in|the|match|winner|game).*$', '', team1, flags=re.IGNORECASE)
-            team2 = re.sub(r'\s+(on|at|in|the|match|winner|game).*$', '', team2, flags=re.IGNORECASE)
+            noise = r'\s+(on|at|in|the|match|winner|game|end|in|a|draw|halftime|score|more|total).*$'
+            team1 = re.sub(noise, '', team1, flags=re.IGNORECASE)
+            team2 = re.sub(noise, '', team2, flags=re.IGNORECASE)
             # Also remove any trailing colons and what follows
             team2 = re.sub(r'\s*:.*$', '', team2)
-            return (team1, team2)
+            return (team1 if team1 else None, team2 if team2 else None)
 
         # Pattern 2: Team1 - Team2 (hyphen separator)
-        match = re.search(r'([A-Za-z\s]+?)\s+-\s+([A-Za-z\s]+?)(?:\s*\(|$)', title, re.IGNORECASE)
+        match = re.search(r'([A-Za-z0-9\s]+?)\s+-\s+([A-Za-z0-9\s]+?)(?:\s*\(|$)', clean_title, re.IGNORECASE)
         if match:
             team1 = match.group(1).strip()
             team2 = match.group(2).strip()
-            # Remove common prefixes
-            for prefix in ['will the', 'the', 'can']:
-                team1 = re.sub(f'^{prefix}\\s+', '', team1, flags=re.IGNORECASE)
-                team2 = re.sub(f'^{prefix}\\s+', '', team2, flags=re.IGNORECASE)
-            return (team1, team2)
+            noise = r'\s+(on|at|in|the|match|winner|game|end|in|a|draw|halftime|score).*$'
+            team1 = re.sub(noise, '', team1, flags=re.IGNORECASE)
+            team2 = re.sub(noise, '', team2, flags=re.IGNORECASE)
+            return (team1 if team1 else None, team2 if team2 else None)
 
         # Pattern 3: "Will [Team1] beat [Team2]"
         match = re.search(r'will\s+(?:the\s+)?([A-Za-z\s]+?)\s+beat\s+(?:the\s+)?([A-Za-z\s]+?)(?:\s+on|\s+in|\s+at|\?|$)', title, re.IGNORECASE)
@@ -167,61 +174,50 @@ class SportsMarketDetector:
             return (team1, team2)
         
         # Pattern 5: "Will [Team] win [Championship]?" (futures - single team)
-        # This is for futures markets like "Will the Baltimore Ravens win Super Bowl 2026?"
         match = re.search(r'will\s+(?:the\s+)?([A-Za-z\s]+?)\s+win\s+([A-Za-z\s]+?)(?:\s+\d{4}|\?|$)', title, re.IGNORECASE)
         if match:
             team = match.group(1).strip()
-            # Remove "the" if present
             team = re.sub(r'^the\s+', '', team, flags=re.IGNORECASE)
-            return (team, None)  # Single team for futures
+            return (team, None)
 
-        # Pattern 6: Abbreviations like "ATL Falcons v NO Saints" or "CIN Bengals v CLE Browns"
-        # Match pattern: 2-4 letter code + team name, separated by "v" or "v."
+        # Pattern 6: Abbreviations like "ATL Falcons v NO Saints"
         match = re.search(r'([A-Z]{2,4}\s+[A-Za-z\s]+?)\s+v\.?\s+([A-Z]{2,4}\s+[A-Za-z\s]+?)(?:\s|$)', title)
         if match:
             team1 = match.group(1).strip()
             team2 = match.group(2).strip()
             return (team1, team2)
         
-        # Pattern 7: Simple "Team1 v Team2" (any format)
+        # Pattern 7: Simple "Team1 v Team2"
         match = re.search(r'^([A-Za-z\s]+?)\s+v\.?\s+([A-Za-z\s]+?)(?:\s|$)', title)
         if match:
             team1 = match.group(1).strip()
             team2 = match.group(2).strip()
-            # Remove common prefixes
             for prefix in ['the']:
                 team1 = re.sub(f'^{prefix}\\s+', '', team1, flags=re.IGNORECASE)
                 team2 = re.sub(f'^{prefix}\\s+', '', team2, flags=re.IGNORECASE)
             return (team1, team2)
         
-        # Pattern 8: "ABBR Team Record" format (e.g., "NYK Knicks 23-12" vs "DET Pistons 26-9")
-        # This handles Polymarket's game display format with abbreviations and records
-        # Match: 2-4 letter abbreviation + team name + record (optional)
+        # Pattern 8: "ABBR Team Record" format
         team_abbr_pattern = r'([A-Z]{2,4})\s+([A-Za-z\s]+?)(?:\s+\d+-\d+)?'
         matches = re.findall(team_abbr_pattern, title)
         if len(matches) >= 2:
-            # Extract team names (ignore abbreviations and records)
             team1_abbr, team1_name = matches[0]
             team2_abbr, team2_name = matches[1]
-            # Clean team names
-            team1_name = team1_name.strip()
-            team2_name = team2_name.strip()
-            return (team1_name, team2_name)
+            return (team1_name.strip(), team2_name.strip())
         
-        # Pattern 9: Two team names with records (e.g., "Knicks 23-12" "Pistons 26-9")
-        # Match team name followed by record pattern
+        # Pattern 9: Two team names with records
         team_with_record = r'([A-Za-z\s]+?)\s+\d+-\d+'
         matches = re.findall(team_with_record, title)
         if len(matches) >= 2:
             team1 = matches[0].strip()
             team2 = matches[1].strip()
-            # Remove common prefixes
             for prefix in ['the']:
                 team1 = re.sub(f'^{prefix}\\s+', '', team1, flags=re.IGNORECASE)
                 team2 = re.sub(f'^{prefix}\\s+', '', team2, flags=re.IGNORECASE)
             return (team1, team2)
 
         return (None, None)
+
 
 
 class SportEventMatcher:
@@ -502,10 +498,10 @@ class SportEventMatcher:
                     market_type_lower == 'ml' or
                     'match-winner' in market_type_lower or
                     'match_winner' in market_type_lower or
-                    # Match odds for NON-SOCCER sports (basketball, hockey, etc.)
-                    ('match_odds' in market_type_lower and not is_soccer) or
-                    # Soccer: ONLY Draw No Bet to avoid 3-way risk
-                    (is_soccer and ('draw_no_bet' in market_type_lower or 'dnb' in market_type_lower)) or
+                    # Match odds for ALL sports including soccer
+                    'match_odds' in market_type_lower or
+                    # Soccer primary markets
+                    (is_soccer and ('1x2' in market_type_lower or 'match_odds' in market_type_lower or 'draw_no_bet' in market_type_lower or 'dnb' in market_type_lower)) or
                     # Tennis/MMA/Boxing use "winner"
                     (market_type_lower.endswith('.winner') or market_type_lower == 'winner')
                 )
@@ -522,9 +518,7 @@ class SportEventMatcher:
                     'period' in market_type_lower or  # Exclude period-specific markets
                     'half' in market_type_lower or    # Exclude half-specific markets
                     'quarter' in market_type_lower or # Exclude quarter-specific markets
-                    'outright' in market_type_lower or   # Exclude futures/outrights
-                    # Reject soccer 3-way markets (1x2, match_odds for soccer)
-                    (is_soccer and ('1x2' in market_type_lower or 'match_odds' in market_type_lower))
+                    'outright' in market_type_lower      # Exclude futures/outrights
                 )
                 
                 is_primary_moneyline = is_primary_moneyline and not is_rejected

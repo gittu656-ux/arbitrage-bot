@@ -225,6 +225,12 @@ class ProbabilityEngine:
                     'prob': prob,
                     'data': outcome_data if isinstance(outcome_data, dict) else {'odds': odds}
                 }
+            # Handle Draw outcome for soccer
+            elif outcome_norm in ['draw', 'x', 'the draw', 'tie']:
+                team_probs['draw'] = {
+                    'prob': prob,
+                    'data': outcome_data if isinstance(outcome_data, dict) else {'odds': odds}
+                }
             # If neither matches well, try "home"/"away"/"team1"/"team2" mapping
             elif outcome_norm in ['home', 'h', 'team1', '1'] and cb_teams[0]:
                 # Assume first team is home/team1
@@ -298,15 +304,18 @@ class ProbabilityEngine:
             # Cloudbet probabilities are now in dicts
             cb_data_team1 = cb_team_probs.get(team1, {})
             cb_data_team2 = cb_team_probs.get(team2, {})
+            cb_data_draw = cb_team_probs.get('draw', {})
             
             cb_prob_team1 = cb_data_team1.get('prob', 0)
             cb_prob_team2 = cb_data_team2.get('prob', 0)
+            cb_prob_draw = cb_data_draw.get('prob', 0)
             
             # LOG CURRENT PROBABILITIES FOR MATCHED EVENTS
+            draw_msg = f", Draw={cb_prob_draw:.2%}" if cb_prob_draw > 0 else ""
             self.logger.info(
                 f"DEBUG PROBS for {pm_title}: "
                 f"PM({team1}={pm_prob_team1:.2%}, {team2}={pm_prob_team2:.2%}) "
-                f"CB({team1}={cb_prob_team1:.2%}, {team2}={cb_prob_team2:.2%})"
+                f"CB({team1}={cb_prob_team1:.2%}, {team2}={cb_prob_team2:.2%}{draw_msg})"
             )
             
             if not pm_prob_team1 or not pm_prob_team2 or not cb_prob_team1 or not cb_prob_team2:
@@ -318,15 +327,21 @@ class ProbabilityEngine:
                 continue
             
             # Check for arbitrage (sum of probabilities < 1.0)
-            # Team1: PM prob + CB prob (opposite outcome)
-            total_prob_team1 = pm_prob_team1 + cb_prob_team2
+            # For soccer/3-way, we need to cover all 3 outcomes.
+            # Usually PM is 2-way: YES = Team1 Win, NO = Team2 Win OR Draw.
+            
+            # Option A: PM YES (Team 1) + CB Team 2 + CB Draw (if exists)
+            total_prob_team1 = pm_prob_team1 + cb_prob_team2 + cb_prob_draw
+            
+            # Option B: PM NO (Team 2 or Draw) + CB Team 1
+            # Note: If PM NO covers both Team 2 win and Draw, we don't need CB Draw here.
             total_prob_team2 = pm_prob_team2 + cb_prob_team1
             
             # LOG ARBITRAGE CALCULATION
             self.logger.info(
                 f"DEBUG ARB for {pm_title}: "
-                f"PM {team1} + CB {team2} = {total_prob_team1:.4f}, "
-                f"PM {team2} + CB {team1} = {total_prob_team2:.4f}"
+                f"PM YES ({team1}) + CB {team2} + CB DRAW = {total_prob_team1:.4f}, "
+                f"PM NO ({team2}) + CB {team1} = {total_prob_team2:.4f}"
             )
             
             # Use the better arbitrage opportunity
@@ -334,7 +349,7 @@ class ProbabilityEngine:
             if total_prob_team1 < total_prob_team2:
                 total_prob = total_prob_team1
                 arb_team = team1
-                pm_team = team1  # Bet on team1 on Polymarket
+                pm_team = team1  # Bet on team1 on Polymarket (YES)
                 cb_team = team2  # Bet on team2 on Cloudbet (opposite)
                 pm_odds = self._probability_to_odds(pm_prob_team1)
                 cb_odds = self._probability_to_odds(cb_prob_team2)
@@ -343,7 +358,7 @@ class ProbabilityEngine:
             else:
                 total_prob = total_prob_team2
                 arb_team = team2
-                pm_team = team2  # Bet on team2 on Polymarket
+                pm_team = team2  # Bet on team2 on Polymarket (NO)
                 cb_team = team1  # Bet on team1 on Cloudbet (opposite)
                 pm_odds = self._probability_to_odds(pm_prob_team2)
                 cb_odds = self._probability_to_odds(cb_prob_team1)
@@ -362,7 +377,6 @@ class ProbabilityEngine:
                         'type': 'arbitrage',
                         'platform_a': 'polymarket',
                         'platform_b': 'cloudbet',
-                        # Keep team tuples so downstream formatters can show real names
                         'pm_teams': pm_teams,
                         'cb_teams': cb_teams,
                         'team': arb_team,
@@ -371,37 +385,45 @@ class ProbabilityEngine:
                         'cb_probability': cb_prob_team2 if arb_team == team1 else cb_prob_team1,
                         'pm_odds': pm_odds,
                         'cb_odds': cb_odds,
-                        'odds_a': pm_odds,  # For bet sizing calculator (Polymarket)
-                        'odds_b': cb_odds,  # For bet sizing calculator (Cloudbet - opposite)
+                        'odds_a': pm_odds,
+                        'odds_b': cb_odds,
                         'total_probability': total_prob,
                         'profit_percentage': profit_pct,
                         'market_a': match['market_a'],
                         'market_b': match['market_b'],
                         'sport_key': match.get('sport', 'unknown'),
                         'start_time': match.get('cb_time'),
-                        # Add team names for each platform (opposite outcomes for arbitrage)
-                        'outcome_a': {'name': pm_team, 'odds': pm_odds},  # Polymarket team
+                        'outcome_a': {'name': pm_team, 'odds': pm_odds, 'outcome': pm_outcome_name},
                         'outcome_b': {
                             'name': cb_team, 
                             'odds': cb_odds,
                             'event_id': cb_metadata.get('event_id'),
                             'market_url': cb_metadata.get('market_url'),
                             'selection_id': cb_metadata.get('selection_id')
-                        }   # Cloudbet team (opposite)
+                        }
                     }
+                    
+                    # Add Draw info if we need to hedge it
+                    if arb_team == team1 and cb_prob_draw > 0:
+                        opportunity['outcome_c'] = {
+                            'name': 'Draw',
+                            'odds': self._probability_to_odds(cb_prob_draw),
+                            'event_id': cb_data_draw['data'].get('event_id'),
+                            'market_url': cb_data_draw['data'].get('market_url'),
+                            'selection_id': cb_data_draw['data'].get('selection_id')
+                        }
+                        opportunity['odds_c'] = opportunity['outcome_c']['odds']
                     
                     opportunities.append(opportunity)
                     
-                    # Log with actual odds for debugging
                     self.logger.info(
                         f"ARBITRAGE: {pm_title} - {arb_team} - "
-                        f"PM: {pm_team} @ {pm_odds:.2f} ({pm_prob_team1:.2%}) vs "
-                        f"CB: {cb_team} @ {cb_odds:.2f} ({cb_prob_team2:.2%}) - "
-                        f"Profit: {profit_pct:.2f}%"
+                        f"PM: {pm_team} @ {pm_odds:.2f} vs CB: {cb_team} @ {cb_odds:.2f}"
+                        + (f" + CB Draw @ {opportunity['odds_c']:.2f}" if 'odds_c' in opportunity else "")
+                        + f" - Profit: {profit_pct:.2f}%"
                     )
             
             # Only check for value edges if NO arbitrage was found
-            # This prioritizes arbitrage over value edges
             if not arbitrage_found:
                 # Also check for value edges (one platform has better odds)
                 # Value edge: PM says 60% chance, CB says 50% chance = 10% edge

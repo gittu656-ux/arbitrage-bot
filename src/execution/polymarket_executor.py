@@ -53,15 +53,25 @@ class PolymarketExecutor:
         try:
             self._get_creds()
             
-            # For arbitrage, we usually want to execute NOW.
-            # Using a slightly higher price for BUY to ensure it fills.
-            # amount is total USDC to spend
+            import math
+            calculated_size = amount / price
+            size = math.ceil(calculated_size * 100) / 100
+            
+            # Double check total value
+            if size * price < 1.0 and amount >= 1.0:
+                size += 0.01
+
+            # For arbitrage, we MUST ensure the order fills immediately.
+            # We add a small 'taker' buffer (0.01) to the limit price to buy through the book.
+            marketable_price = price
+            if side == "BUY":
+                marketable_price = min(0.99, price + 0.01)
             
             order_args = OrderArgs(
                 token_id=token_id,
-                price=round(price, 2),
+                price=round(marketable_price, 2),
                 side=side,
-                size=round(amount / price, 2) if side == "BUY" else round(amount, 2),
+                size=size,
             )
             
             self.logger.info(f"Placing {side} order on Polymarket: {token_id} @ {price} for {amount} USDC")

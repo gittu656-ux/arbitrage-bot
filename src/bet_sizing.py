@@ -1,7 +1,7 @@
 """
 Kelly Criterion bet sizing calculator.
 """
-from typing import Dict
+from typing import Dict, Optional
 from .logger import setup_logger
 
 
@@ -24,7 +24,8 @@ class BetSizing:
         self,
         odds_a: float,
         odds_b: float,
-        profit_percentage: float
+        profit_percentage: float,
+        odds_c: Optional[float] = None
     ) -> Dict:
         """
         Calculate optimal bet sizes using Kelly Criterion for arbitrage.
@@ -36,71 +37,49 @@ class BetSizing:
             odds_a: Decimal odds on platform A
             odds_b: Decimal odds on platform B
             profit_percentage: Expected profit percentage
+            odds_c: Decimal odds on platform C (optional for 3-way arbitrage)
         
         Returns:
             Dictionary with bet sizing information
         """
-        # For arbitrage, we bet on both outcomes
-        # We need to calculate bet amounts such that:
-        # - If outcome A wins: bet_a * odds_a - bet_a - bet_b = profit
-        # - If outcome B wins: bet_b * odds_b - bet_a - bet_b = profit
-        
         # Calculate implied probabilities
         prob_a = 1.0 / odds_a
         prob_b = 1.0 / odds_b
-        total_prob = prob_a + prob_b
+        prob_c = 1.0 / odds_c if odds_c and odds_c > 1.0 else 0.0
         
-        # For arbitrage, we want equal profit regardless of outcome
-        # Optimal allocation: bet amounts proportional to inverse odds
-        # This ensures equal profit regardless of which outcome wins
+        total_prob = prob_a + prob_b + prob_c
         
-        # Calculate optimal bet ratios
-        # bet_a / bet_b = odds_b / odds_a (for equal profit)
-        
-        # Using the formula for arbitrage:
-        # Total capital = bet_a + bet_b
-        # If A wins: profit = bet_a * odds_a - total_capital
-        # If B wins: profit = bet_b * odds_b - total_capital
-        # For equal profit: bet_a * odds_a = bet_b * odds_b
-        
-        # Therefore: bet_a = (total_capital * odds_b) / (odds_a + odds_b)
-        #            bet_b = (total_capital * odds_a) / (odds_a + odds_b)
-        
-        # But we want to use Kelly fraction of bankroll
+        # Kelly fraction of bankroll
         kelly_bankroll = self.bankroll * self.kelly_fraction
         
-        # Calculate bet amounts for equal profit
-        bet_amount_a = (kelly_bankroll * odds_b) / (odds_a + odds_b)
-        bet_amount_b = (kelly_bankroll * odds_a) / (odds_a + odds_b)
+        # For equal profit regardless of outcome, bet amounts should be:
+        # bet_i = (Total_Capital * prob_i) / Total_Prob
         
-        # Ensure we don't exceed bankroll
-        total_bet = bet_amount_a + bet_amount_b
-        if total_bet > kelly_bankroll:
-            # Scale down proportionally
-            scale = kelly_bankroll / total_bet
-            bet_amount_a *= scale
-            bet_amount_b *= scale
-            total_bet = kelly_bankroll
+        bet_amount_a = (kelly_bankroll * prob_a) / total_prob
+        bet_amount_b = (kelly_bankroll * prob_b) / total_prob
         
-        # Calculate guaranteed profit
-        # Profit if A wins: bet_a * odds_a - total_bet
-        # Profit if B wins: bet_b * odds_b - total_bet
-        profit_if_a_wins = bet_amount_a * odds_a - total_bet
-        profit_if_b_wins = bet_amount_b * odds_b - total_bet
-        
-        # They should be equal (or very close due to rounding)
-        guaranteed_profit = min(profit_if_a_wins, profit_if_b_wins)
-        profit_percentage_actual = (guaranteed_profit / total_bet) * 100
-        
-        return {
+        result = {
             'bet_amount_a': round(bet_amount_a, 2),
             'bet_amount_b': round(bet_amount_b, 2),
-            'total_capital': round(total_bet, 2),
-            'guaranteed_profit': round(guaranteed_profit, 2),
-            'profit_percentage': round(profit_percentage_actual, 2),
+            'total_capital': round(bet_amount_a + bet_amount_b, 2),
             'kelly_fraction_used': self.kelly_fraction,
             'bankroll_used': round(kelly_bankroll, 2)
         }
+        
+        if odds_c:
+            bet_amount_c = (kelly_bankroll * prob_c) / total_prob
+            result['bet_amount_c'] = round(bet_amount_c, 2)
+            result['total_capital'] = round(bet_amount_a + bet_amount_b + bet_amount_c, 2)
+        
+        # Calculate guaranteed profit
+        # profit = (Total_Capital / Total_Prob) - Total_Capital
+        total_bet = result['total_capital']
+        guaranteed_profit = (total_bet / total_prob) - total_bet
+        
+        result['guaranteed_profit'] = round(guaranteed_profit, 2)
+        result['profit_percentage'] = round((guaranteed_profit / total_bet) * 100, 2)
+        
+        return result
     
     def calculate_for_opportunity(self, opportunity: Dict) -> Dict:
         """
@@ -114,18 +93,20 @@ class BetSizing:
         """
         odds_a = opportunity['odds_a']
         odds_b = opportunity['odds_b']
+        odds_c = opportunity.get('odds_c')
         profit_percentage = opportunity['profit_percentage']
         
-        bet_sizing = self.calculate_kelly(odds_a, odds_b, profit_percentage)
+        bet_sizing = self.calculate_kelly(odds_a, odds_b, profit_percentage, odds_c=odds_c)
         
         # Add bet sizing to opportunity
         opportunity.update(bet_sizing)
         
+        msg = f"Bet A: ${bet_sizing['bet_amount_a']}, Bet B: ${bet_sizing['bet_amount_b']}"
+        if 'bet_amount_c' in bet_sizing:
+            msg += f", Bet C: ${bet_sizing['bet_amount_c']}"
+        
         self.logger.debug(
-            f"Bet sizing calculated: "
-            f"Bet A: ${bet_sizing['bet_amount_a']}, "
-            f"Bet B: ${bet_sizing['bet_amount_b']}, "
-            f"Profit: ${bet_sizing['guaranteed_profit']}"
+            f"Bet sizing calculated: {msg}, Profit: ${bet_sizing['guaranteed_profit']}"
         )
         
         return opportunity

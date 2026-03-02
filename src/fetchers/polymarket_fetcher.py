@@ -107,6 +107,15 @@ class PolymarketFetcher:
             
             # Extract CLOB Token IDs if available
             clob_token_ids = market_data.get('clobTokenIds', [])
+            
+            # If we already have token_ids in metadata (from event-level mapping), use them
+            existing_token_ids = market_data.get('metadata', {}).get('token_ids', {})
+            if existing_token_ids:
+                token_ids = existing_token_ids
+                # Also try to populate clob_token_ids for index-based matching if needed
+                if not clob_token_ids:
+                    clob_token_ids = list(existing_token_ids.values())
+
             if isinstance(clob_token_ids, str):
                 try:
                     import json
@@ -396,13 +405,41 @@ class PolymarketFetcher:
                                     
                                     if has_vs:
                                         self.logger.debug(f"Processing event: {event_title} (ID: {event_id})")
-                                        # Try to get outcomes from main game market first
+                                        # Try to get outcomes and token IDs from main game market first
                                         outcomes = []
                                         outcome_prices = []
+                                        token_ids = {}
                                         
                                         if main_game_market:
-                                            outcomes = main_game_market.get('outcomes', [])
-                                            outcome_prices = main_game_market.get('outcomePrices', [])
+                                            # Parse outcomes and prices
+                                            outcomes_raw = main_game_market.get('outcomes', [])
+                                            outcome_prices_raw = main_game_market.get('outcomePrices', [])
+                                            
+                                            # Also parse token IDs
+                                            clob_token_ids_raw = main_game_market.get('clobTokenIds', [])
+                                            
+                                            import json
+                                            if isinstance(outcomes_raw, str):
+                                                try: outcomes = json.loads(outcomes_raw)
+                                                except: outcomes = []
+                                            else: outcomes = outcomes_raw
+                                            
+                                            if isinstance(outcome_prices_raw, str):
+                                                try: outcome_prices = json.loads(outcome_prices_raw)
+                                                except: outcome_prices = []
+                                            else: outcome_prices = outcome_prices_raw
+                                            
+                                            clob_token_ids = []
+                                            if isinstance(clob_token_ids_raw, str):
+                                                try: clob_token_ids = json.loads(clob_token_ids_raw)
+                                                except: clob_token_ids = []
+                                            else: clob_token_ids = clob_token_ids_raw
+                                            
+                                            # Map outcomes to token IDs
+                                            if outcomes and clob_token_ids:
+                                                for i, name in enumerate(outcomes):
+                                                    if i < len(clob_token_ids):
+                                                        token_ids[name] = clob_token_ids[i]
                                         
                                         # If main game market didn't have valid outcomes, try other markets
                                         if not outcomes:
@@ -410,45 +447,59 @@ class PolymarketFetcher:
                                                 market_title = market.get('question') or market.get('title') or ''
                                                 # Look for any market with team names
                                                 if any(team in market_title.lower() for team in event_title.lower().split()):
-                                                    outcomes = market.get('outcomes', [])
-                                                    outcome_prices = market.get('outcomePrices', [])
-                                                    if outcomes:  # Only need outcomes, prices can be invalid
+                                                    # Same extraction logic as above
+                                                    o_raw = market.get('outcomes', [])
+                                                    op_raw = market.get('outcomePrices', [])
+                                                    tid_raw = market.get('clobTokenIds', [])
+                                                    
+                                                    import json
+                                                    try:
+                                                        outcomes = json.loads(o_raw) if isinstance(o_raw, str) else o_raw
+                                                        outcome_prices = json.loads(op_raw) if isinstance(op_raw, str) else op_raw
+                                                        clob_token_ids = json.loads(tid_raw) if isinstance(tid_raw, str) else tid_raw
+                                                    except: continue
+                                                        
+                                                    if outcomes:
+                                                        if outcomes and clob_token_ids:
+                                                            for i, name in enumerate(outcomes):
+                                                                if i < len(clob_token_ids):
+                                                                    token_ids[name] = clob_token_ids[i]
                                                         break
                                         
                                         # Create market from event title (even if prices are invalid)
-                                        # The matching will work based on title, prices can be handled later
-                                        self.logger.debug(f"  Found outcomes: {outcomes}, outcome_prices: {outcome_prices}")
                                         if outcomes:
-                                            # Parse if strings
-                                            import json
-                                            if isinstance(outcomes, str):
-                                                try:
-                                                    outcomes = json.loads(outcomes)
-                                                except:
-                                                    outcomes = []
-                                            
-                                            if isinstance(outcome_prices, str):
-                                                try:
-                                                    outcome_prices = json.loads(outcome_prices)
-                                                except:
-                                                    outcome_prices = []
-                                            
+                                            # Find a valid condition_id from the event's markets for the CLOB fallback
+                                            clob_condition_id = event_id
+                                            if main_game_market and main_game_market.get('conditionId'):
+                                                clob_condition_id = main_game_market.get('conditionId')
+                                            elif markets and isinstance(markets, list) and len(markets) > 0:
+                                                # Use the first market's conditionId as a fallback
+                                                for m in markets:
+                                                    if m.get('conditionId'):
+                                                        clob_condition_id = m.get('conditionId')
+                                                        break
+
                                             # Create market - use event title as the market title
                                             event_market = {
                                                 'id': f"event_{event_id}",
                                                 'question': event_title,
                                                 'title': event_title,
-                                                'conditionId': event_id,
+                                                'conditionId': clob_condition_id, # Use real condition ID
                                                 'slug': event.get('slug', ''),
-                                                'outcomes': outcomes if isinstance(outcomes, list) else [],
-                                                'outcomePrices': outcome_prices if isinstance(outcome_prices, list) else [],
+                                                'outcomes': outcomes,
+                                                'outcomePrices': outcome_prices,
+                                                'clobTokenIds': list(token_ids.values()), # Pass token IDs at top level
                                                 'active': event.get('active', True),
                                                 'closed': event.get('closed', False),
                                                 'startDate': event.get('startDate'),
-                                                'endDate': event.get('endDate')
+                                                'endDate': event.get('endDate'),
+                                                'metadata': {
+                                                    'token_ids': token_ids,
+                                                    'condition_id': clob_condition_id
+                                                }
                                             }
                                             all_markets.append(event_market)
-                                            self.logger.info(f"Added event market: {event_title} with {len(outcomes)} outcomes")
+                                            self.logger.info(f"Added event market: {event_title} with {len(outcomes)} outcomes and {len(token_ids)} token IDs (CID: {clob_condition_id})")
                                         else:
                                             self.logger.debug(f"  No outcomes found for event: {event_title}")
                                     else:

@@ -73,7 +73,7 @@ class AutobetConfig(BaseModel):
     # Flag to enable real money betting (dangerous!)
     real_execution: bool = Field(default=False)
     # Currency to use for real betting (e.g. USDT, USDC)
-    currency: str = Field(default="USDT")
+    currency: str = Field(default="USDC")
 
 
 class LoggingConfig(BaseModel):

@@ -43,7 +43,7 @@ class EventMatcher:
         self.debug = True  # Enable debug logging
     
     def _normalize_team_name(self, name: str) -> str:
-        """Normalize team name for matching."""
+        """Normalize team name for matching using word boundaries."""
         if not name:
             return ""
         
@@ -52,34 +52,54 @@ class EventMatcher:
         # Remove common prefixes from Cloudbet
         name = name.replace('s-', '').replace('h-', '').replace('a-', '')
         
-        # Remove city names and common soccer descriptors
+        # Remove city names and common soccer descriptors ONLY as whole words
         city_patterns = [
-            'los angeles', 'la ', 'new york', 'ny ', 'san francisco', 'sf ',
-            'golden state', 'gs ', 'manchester', 'liverpool', 'real', 'fc ', 
-            'cf ', 'ac ', 'atlanta', 'boston', 'chicago', 'dallas', 'denver',
+            'los angeles', 'la', 'new york', 'ny', 'san francisco', 'sf',
+            'golden state', 'gs', 'manchester', 'liverpool', 'real', 'fc', 
+            'cf', 'ac', 'atlanta', 'boston', 'chicago', 'dallas', 'denver',
             'detroit', 'houston', 'indiana', 'miami', 'milwaukee', 'minnesota',
             'new orleans', 'oklahoma', 'orlando', 'philadelphia', 'phoenix',
             'portland', 'sacramento', 'san antonio', 'toronto', 'utah',
             'washington', 'brooklyn', 'charlotte', 'cleveland'
         ]
-        for city in city_patterns:
-            name = name.replace(city, '').strip()
         
-        # Remove common soccer suffixes/terms
+        import re
+        for city in city_patterns:
+            name = re.sub(r'\b' + re.escape(city) + r'\b', '', name)
+        
+        # Remove common soccer suffixes/terms ONLY as whole words
         suffixes = [
-            ' fc', ' cf', ' united', ' city', ' town', ' albion', ' athletic', 
-            ' county', ' & hove albion', ' rangers', ' hotspur', ' arsenal',
-            ' de futbol', ' balompie', ' borussia', ' mnonchengladbach', ' munich'
+            'fc', 'cf', 'united', 'city', 'town', 'albion', 'athletic', 
+            'county', 'rangers', 'hotspur', 'arsenal',
+            'de futbol', 'balompie', 'borussia', 'mnonchengladbach', 'munich'
         ]
         for suffix in suffixes:
-            if suffix in name:
-                name = name.replace(suffix, '').strip()
+            name = re.sub(r'\b' + re.escape(suffix) + r'\b', '', name)
+        
+        # Remove specific phrases
+        name = name.replace('& hove albion', '')
         
         # Remove separators
         name = name.replace('-', ' ').replace('_', ' ').replace(',', '').replace('.', '')
         name = ' '.join(name.split())
         
         return name
+    
+    def _is_moneyline_market(self, title: str) -> bool:
+        """Check if the market title looks like a main moneyline/game winner market."""
+        title_lower = title.lower()
+        # Markets to skip because they are props or specialized (not comparable to 2-way/3-way ML directly)
+        prop_keywords = [
+            'halftime', 'half-time', 'score', 'corners', 'both teams to',
+            'goalscorer', 'player', 'booking', 'card', 'handicap',
+            'total', 'over/under', 'period', 'quarter', 'inning',
+            'end in a draw', 'draw at halftime', 'win by', 'lose by',
+            'exact score'
+        ]
+        for keyword in prop_keywords:
+            if keyword in title_lower:
+                return False
+        return True
     
     def _extract_teams(self, title: str) -> Tuple[Optional[str], Optional[str]]:
         """Extract team names from title."""
@@ -125,6 +145,14 @@ class EventMatcher:
         cb1_norm = self._normalize_team_name(cb_team1)
         cb2_norm = self._normalize_team_name(cb_team2)
         
+        # If any team becomes empty after normalization, matching is unreliable
+        if not pm1_norm or not pm2_norm or not cb1_norm or not cb2_norm:
+            # Revert to raw names if normalized is empty
+            pm1_norm = pm1_norm or pm_team1.lower()
+            pm2_norm = pm2_norm or pm_team2.lower()
+            cb1_norm = cb1_norm or cb_team1.lower()
+            cb2_norm = cb2_norm or cb_team2.lower()
+
         # Try order 1: PM team1 = CB team1, PM team2 = CB team2
         sim1_1 = fuzz.ratio(pm1_norm, cb1_norm)
         sim1_2 = fuzz.ratio(pm2_norm, cb2_norm)
@@ -211,6 +239,12 @@ class EventMatcher:
         for market in polymarket_markets:
             title = market.title if hasattr(market, 'title') else market.get('title', '')
             if self.detector.is_sports_market(title):
+                # NEW: Filter out prop/special markets that shouldn't match full-game moneyline
+                if not self._is_moneyline_market(title):
+                    if self.debug:
+                        self.logger.debug(f"Skipping prop market: {title}")
+                    continue
+
                 # Extract teams to check if this is a game (two teams) or futures (single team)
                 teams = self._extract_teams(title)
                 if teams[0] and teams[1]:
